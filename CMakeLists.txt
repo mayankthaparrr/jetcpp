@@ -16,8 +16,8 @@ FetchContent_MakeAvailable(raylib)
 
 add_executable(ATR
         main.c
-        ui_ribbon.c
-        ui_ribbon.h
+        ui/ui_ribbon.c
+        ui/ui_ribbon.h
 )
 
 target_link_libraries(ATR PRIVATE raylib)

@@ -1,28 +1,35 @@
 #include "raylib.h"
+#include  <string.h>
+
 
 typedef struct {
     char first_letter;
     char *remains;
-    float x;
+    char *name;
     Rectangle rect;
+    float x;
+    float y;
+    float posx;
+    float posy;
 } ribbonItems;
 
-ribbonItems items[10] = {
-    {'F', "ile",0},
-    {'E', "dit",0},
-    {'S', "earch",0},
-{'R', "un",0},
-    {'C', "ompile",0},
-    {'D', "ebug",0},
-    {'P', "roject",0},
-    {'O', "ptions",0},
-    {'W', "indow",0},
-    {'H', "elp",0}
+ribbonItems items[10]={
+    { 'F',"ile"},
+    {'E',"dit"},
+    {'S',"earch"},
+    {'R',"un"},
+    {'C',"ompile"},
+    {'D',"ebug"},
+    {'P',"roject"},
+    {'O',"ptions"},
+    {'W',"indow"},
+    {'H',"elp"}
 };
+
 
 typedef struct {
     char *name;
-    float size;
+    int highlight;
 }ribbonOptions;
 
 ribbonOptions file[8]={
@@ -129,75 +136,100 @@ ribbonOptions help[6]={
     {"About",0}
 };
 
-void drawMenu(ribbonOptions option[],int i,Color color, Font usedfont,float fontsize) {
+
+
+
+void drawMenu(ribbonOptions option[],int i,Color color, Font usedfont,float fontsize,int posx2) {
+    int height=0;
+    int width=0;
+    for (int n=0;n<i;n++) {
+        height+=MeasureTextEx(usedfont,option[n].name,fontsize,0).y*1.5;
+        if (width<MeasureTextEx(usedfont,option[n].name,fontsize,0).x) {
+            width=MeasureTextEx(usedfont,option[n].name,fontsize,0).x;
+        }
+    }
+    width*=1.1;
+
+    DrawRectangleRounded((Rectangle){posx2,MeasureTextEx(usedfont,options[i].name,fontsize,0).y-15,width,height+15},0.1,1,color);
+    height=fontsize*1.3; width=width*0.1;
+    for (int n=0;n<i;n++) {
+    DrawTextEx(usedfont,option[n].name,(Vector2){posx2+5,height},fontsize,0,BLACK);/*
+    if (CheckCollisionPointRec(GetMousePosition(),(Rectangle){posx2+5,height,options[i].name,fontsize,0).y-15,width,height+15})) {
+        DrawRectangleRounded(items[i].rect,0.2,8,LIGHTGRAY);
+    }*/
+    height+=MeasureTextEx(usedfont,option[n].name,fontsize,0).y*1.5;
+    }
+
+
 
 }
 
 void selectMenu(int i, Color color, Font usedfont, float fontsize) {
     int j;
     switch (i) {
-            case 1:j=8;drawMenu(file,j,color,usedfont,fontsize);break;//file
-            case 2:j=7;drawMenu(edit,j,color,usedfont,fontsize);break;//edit
-            case 3:j=7;drawMenu(search,j,color,usedfont,fontsize);break;//search
-            case 4: j=6;drawMenu(run,j,color,usedfont,fontsize);break;//run
-            case 5: j=6; drawMenu(compile,j,color,usedfont,fontsize); break;//compile
-            case 6: j=6; drawMenu(debug,j,color,usedfont,fontsize);break;//debug
-            case 7: j=6; drawMenu(project,j,color,usedfont,fontsize);break;//project
-            case 8: j=10; drawMenu(options,j,color,usedfont,fontsize);break;//options
-            case 9: j=15; drawMenu(window,j,color,usedfont,fontsize);break;//window
-            case 10: j=6; drawMenu(help,j,color,usedfont,fontsize); break;//help
+            case 1:j=8;drawMenu(file,j,color,usedfont,fontsize,items[0].x);break;//file
+            case 2:j=7;drawMenu(edit,j,color,usedfont,fontsize,items[1].x);break;//edit
+            case 3:j=7;drawMenu(search,j,color,usedfont,fontsize,items[2].x);break;//search
+            case 4: j=6;drawMenu(run,j,color,usedfont,fontsize,items[3].x);break;//run
+            case 5: j=6; drawMenu(compile,j,color,usedfont,fontsize,items[4].x); break;//compile
+            case 6: j=6; drawMenu(debug,j,color,usedfont,fontsize,items[5].x);break;//debug
+            case 7: j=6; drawMenu(project,j,color,usedfont,fontsize,items[6].x);break;//project
+            case 8: j=10; drawMenu(options,j,color,usedfont,fontsize,items[7].x);break;//options
+            case 9: j=15; drawMenu(window,j,color,usedfont,fontsize,items[8].x);break;//window
+            case 10: j=6; drawMenu(help,j,color,usedfont,fontsize,items[9].x); break;//help
     }
 }
 
-
+static int activeMenu;
 
 void drawRibbon(Color color, Font usedfont, float fontsize) {
-    Vector2 Size;
     float sumx;
-    int flag=0;
-    for (int i=0;i<10;i++) {
-        char c[2]={items[i].first_letter,'\0'};
-        Size=MeasureTextEx(usedfont,c,fontsize,0);
-        items[i].x+=Size.x;
-        Size=MeasureTextEx(usedfont,items[i].remains,fontsize,0);
-        items[i].x+=Size.x;
-        sumx+=Size.x;
-    }
+
     sumx=(GetScreenWidth()-sumx-10)/16;
     int posx=(GetScreenWidth()*0.01);
-    DrawRectangle(0,0,GetScreenWidth(),Size.y+2,color);
+    if (activeMenu != -1) {
+        selectMenu(activeMenu, color, usedfont, fontsize);
+    }
+    DrawRectangle(0,0,GetScreenWidth(),fontsize*1.05,color);
     int posx2=posx;
     for (int i=0;i<10;i++) {
         char c[2]={items[i].first_letter,'\0'};
         int width=MeasureTextEx(usedfont,c,fontsize,0).x;
         width+=MeasureTextEx(usedfont,items[i].remains,fontsize,0).x;
         items[i].rect=(Rectangle){posx2,0,width+4,fontsize};
+        items[i].x=posx2;
         posx2+=width;
-        posx2+=(GetScreenWidth()*0.02);
+        posx2+=15;
 
         if (CheckCollisionPointRec(GetMousePosition(),items[i].rect)) {
-//            DrawRectangleRounded(items[i].rect,0.2,8,LIGHTGRAY);
+          DrawRectangleRounded(items[i].rect,0.2,8,LIGHTGRAY);
         }
+
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            if (CheckCollisionPointRec(GetMousePosition(),items[i].rect)) {
-
-                while (1) {
-                    DrawRectangleRounded(items[i].rect,0.2,8,LIGHTGRAY);
-                    selectMenu(i,color,usedfont,fontsize);
-                    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                        if (CheckCollisionPointRec(GetMousePosition(),items[i].rect)) {
-
-                        }
-                    }
+            if (CheckCollisionPointRec(GetMousePosition(), items[i].rect)) {
+                // If clicking the currently open menu, close it; otherwise open this one
+                if (activeMenu == i + 1) {
+                    activeMenu = -1;
+                } else {
+                    activeMenu = i + 1;
                 }
             }
+        }
+
+        // Draw menu header button
+        if (activeMenu == i + 1 || CheckCollisionPointRec(GetMousePosition(), items[i].rect)) {
+            DrawRectangleRounded(items[i].rect, 0.2, 8, LIGHTGRAY);
         }
         DrawTextEx(usedfont,c,(Vector2){posx,1},fontsize,0,RED);
         posx+=MeasureTextEx(usedfont,c,fontsize,0).x;
         DrawTextEx(usedfont,items[i].remains,(Vector2){posx,1},fontsize,0,BLACK);
         posx+=MeasureTextEx(usedfont,items[i].remains,fontsize,0).x;
-        posx+=(GetScreenWidth()*0.02);
+        posx+=15;
+
+
 
     }
+
+
 }
 
