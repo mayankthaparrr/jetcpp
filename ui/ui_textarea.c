@@ -56,6 +56,9 @@ void textstuff(Font usedfont, float fontsize) {
         buffer[length-1] = '\n';
         buffer[length] = '\0';
     }
+    BeginScissorMode(ScreenRect.x, ScreenRect.y, ScreenRect.width, ScreenRect.height);
     DrawTextEx(usedfont, buffer, (Vector2){ScreenRect.x*1.8, fname_size.y*2.5}, fontsize, 0, WHITE);
+    EndScissorMode();
+
 }
 
