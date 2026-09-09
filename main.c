@@ -6,7 +6,9 @@
 #include <raylib.h>
 #include <string.h>
 #include "ui/ui_ribbon.h"
+#include "ui/ui_textarea.h"
 void drawRibbon(Color,Font,float);
+void borders(float,char *,Font);
 Font Roboto;
 float fontsize;
 
@@ -40,8 +42,9 @@ int main() {
         }
         BeginDrawing();
         ClearBackground(tooblue);
-        DrawLineEx((Vector2){10,fontsize*2.2},(Vector2){20,fontsize*2.2},5,WHITE);
+        borders(fontsize,filename,usedfont);
         drawRibbon(greyy,usedfont,fontsize);
+        textstuff(usedfont,fontsize);
         EndDrawing();
 
     }

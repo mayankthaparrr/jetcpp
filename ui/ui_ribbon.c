@@ -1,7 +1,6 @@
 #include "raylib.h"
-#include  <string.h>
 
-
+void handleRibbonHover();
 typedef struct {
     char first_letter;
     char *remains;
@@ -139,6 +138,7 @@ ribbonOptions help[6]={
 
 
 
+
 void drawMenu(ribbonOptions option[],int i,Color color, Font usedfont,float fontsize,int posx2) {
     int height=0;
     int width=0;
@@ -151,15 +151,27 @@ void drawMenu(ribbonOptions option[],int i,Color color, Font usedfont,float font
     width*=1.1;
 
     DrawRectangleRounded((Rectangle){posx2,MeasureTextEx(usedfont,options[i].name,fontsize,0).y-15,width,height+15},0.1,1,color);
+    float sposx=posx2*1.01;
+    float nposx=sposx+(width*0.90);
+
     height=fontsize*1.3; width=width*0.1;
     for (int n=0;n<i;n++) {
-    DrawTextEx(usedfont,option[n].name,(Vector2){posx2+5,height},fontsize,0,BLACK);/*
-    if (CheckCollisionPointRec(GetMousePosition(),(Rectangle){posx2+5,height,options[i].name,fontsize,0).y-15,width,height+15})) {
-        DrawRectangleRounded(items[i].rect,0.2,8,LIGHTGRAY);
-    }*/
-    height+=MeasureTextEx(usedfont,option[n].name,fontsize,0).y*1.5;
-    }
+        float posy=height-(fontsize*0.29);
+        Vector2 mouse = GetMousePosition();
+        Rectangle rect={posx2+2,height,(width*10)*0.9998,MeasureTextEx(usedfont,option[n].name,fontsize,0).y};
+        if(CheckCollisionPointRec(mouse, rect)){
+            DrawRectangle(rect.x,rect.y,width*10,rect.height,LIGHTGRAY);
+        }
+        // DrawLine(sposx,posy,nposx,posy,DARKGRAY);
+        DrawTextEx(usedfont,option[n].name,(Vector2){posx2+5,height},fontsize,0,BLACK);
 
+
+        height+=MeasureTextEx(usedfont,option[n].name,fontsize,0).y*1.5;
+
+
+
+
+    }
 
 
 }
@@ -180,56 +192,70 @@ void selectMenu(int i, Color color, Font usedfont, float fontsize) {
     }
 }
 
-static int activeMenu;
+static int activeMenu=-1;
+
+void handleRibbonHover(void) {
+    if (activeMenu == -1) {
+        return;
+    }
+
+
+    Vector2 mouse = GetMousePosition();
+    int overRibbon=0;
+
+    for (int i = 0; i < 10; i++) {
+        if (CheckCollisionPointRec(mouse, items[i].rect)) {
+            activeMenu = i + 1;
+            return;
+        }
+    }
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)&&!overRibbon) {
+        activeMenu = -1;
+    }
+}
+
 
 void drawRibbon(Color color, Font usedfont, float fontsize) {
     float sumx;
+    // draw currently active dropdown
+    if (activeMenu != -1) {selectMenu(activeMenu, color, usedfont, fontsize);}
+    sumx = (GetScreenWidth() - sumx - 10) / 16;
+    int posx = (GetScreenWidth() * 0.01);
+    DrawRectangle(0, 0, GetScreenWidth(), fontsize * 1.05, color);
+    int posx2 = posx;
 
-    sumx=(GetScreenWidth()-sumx-10)/16;
-    int posx=(GetScreenWidth()*0.01);
-    if (activeMenu != -1) {
-        selectMenu(activeMenu, color, usedfont, fontsize);
-    }
-    DrawRectangle(0,0,GetScreenWidth(),fontsize*1.05,color);
-    int posx2=posx;
-    for (int i=0;i<10;i++) {
-        char c[2]={items[i].first_letter,'\0'};
-        int width=MeasureTextEx(usedfont,c,fontsize,0).x;
-        width+=MeasureTextEx(usedfont,items[i].remains,fontsize,0).x;
-        items[i].rect=(Rectangle){posx2,0,width+4,fontsize};
-        items[i].x=posx2;
-        posx2+=width;
-        posx2+=15;
+    for (int i = 0; i < 10; i++) {
+        char c[2] = {items[i].first_letter, '\0'};
+        int width = MeasureTextEx(usedfont, c, fontsize, 0).x;
+        width += MeasureTextEx(usedfont, items[i].remains, fontsize, 0).x;
+        items[i].rect = (Rectangle){posx2, 0, width + 4, fontsize};
+        items[i].x = posx2;
+        posx2 += width + 15;
 
-        if (CheckCollisionPointRec(GetMousePosition(),items[i].rect)) {
-          DrawRectangleRounded(items[i].rect,0.2,8,LIGHTGRAY);
-        }
-
+        // click handling stays here
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            if (CheckCollisionPointRec(GetMousePosition(), items[i].rect)) {
-                // If clicking the currently open menu, close it; otherwise open this one
+
+            if (CheckCollisionPointRec(GetMousePosition(),items[i].rect)) {
+
                 if (activeMenu == i + 1) {
                     activeMenu = -1;
-                } else {
+                }
+                else {
                     activeMenu = i + 1;
                 }
             }
         }
 
-        // Draw menu header button
-        if (activeMenu == i + 1 || CheckCollisionPointRec(GetMousePosition(), items[i].rect)) {
-            DrawRectangleRounded(items[i].rect, 0.2, 8, LIGHTGRAY);
+        // drawing...
+        if (activeMenu == i + 1 || CheckCollisionPointRec(GetMousePosition(),items[i].rect)) {
+            DrawRectangleRounded(items[i].rect,0.2,8,LIGHTGRAY);
         }
-        DrawTextEx(usedfont,c,(Vector2){posx,1},fontsize,0,RED);
-        posx+=MeasureTextEx(usedfont,c,fontsize,0).x;
-        DrawTextEx(usedfont,items[i].remains,(Vector2){posx,1},fontsize,0,BLACK);
-        posx+=MeasureTextEx(usedfont,items[i].remains,fontsize,0).x;
-        posx+=15;
-
-
-
+        DrawTextEx(usedfont,c,(Vector2){posx, 1},fontsize,0,RED);
+        posx += MeasureTextEx(usedfont, c, fontsize, 0).x;
+        DrawTextEx(usedfont,items[i].remains,(Vector2){posx, 1},fontsize,0,BLACK);
+        posx += MeasureTextEx(usedfont, items[i].remains, fontsize, 0).x;
+        posx += 15;
     }
-
-
+    // handle hover AFTER all rectangles exist
+    handleRibbonHover();
 }
-
