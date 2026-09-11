@@ -1,6 +1,9 @@
+#include <stdio.h>
+
 #include "raylib.h"
 
 void handleRibbonHover();
+void handleRibbonEvents();
 typedef struct {
     char first_letter;
     char *remains;
@@ -134,7 +137,7 @@ ribbonOptions help[6]={
     {"Help on Help",0},
     {"About",0}
 };
-
+Vector2 mouse;
 
 
 
@@ -157,9 +160,10 @@ void drawMenu(ribbonOptions option[],int i,Color color, Font usedfont,float font
     height=fontsize*1.3; width=width*0.1;
     for (int n=0;n<i;n++) {
         float posy=height-(fontsize*0.29);
-        Vector2 mouse = GetMousePosition();
+         mouse = GetMousePosition();
         Rectangle rect={posx2+2,height,(width*10)*0.9998,MeasureTextEx(usedfont,option[n].name,fontsize,0).y};
         if(CheckCollisionPointRec(mouse, rect)){
+            handleRibbonEvents((Rectangle){rect.x,rect.y,width*10,rect.height},option[n].name);
             DrawRectangle(rect.x,rect.y,width*10,rect.height,LIGHTGRAY);
         }
         // DrawLine(sposx,posy,nposx,posy,DARKGRAY);
@@ -258,4 +262,17 @@ void drawRibbon(Color color, Font usedfont, float fontsize) {
     }
     // handle hover AFTER all rectangles exist
     handleRibbonHover();
+}
+
+void handleRibbonEvents(Rectangle rect,char *option) {
+
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (CheckCollisionPointRec(GetMousePosition(),rect)) {
+            if (option=="Open") {
+                printf("fileopen");
+                //                fileopen();
+            }
+        }
+    }
+
 }

@@ -6,4 +6,5 @@
 #define ATR_UI_TEXTAREA_H
 void borders (float,char *,Font);
 void textstuff(Font,float);
+
 #endif //ATR_UI_TEXTAREA_H

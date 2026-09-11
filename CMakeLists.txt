@@ -20,6 +20,8 @@ add_executable(ATR
         ui/ui_ribbon.h
         ui/ui_textarea.c
         ui/ui_textarea.h
+        ui/ui_ribbonEvents.c
+        ui/ui_ribbonEvents.h
 )
 
 target_link_libraries(ATR PRIVATE raylib)
