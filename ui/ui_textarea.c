@@ -7,8 +7,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include "raylib.h"
+#include "ui_scroll.h"
 
 //inits vars
+int scrollLine = 0;
+int scrollColumn = 0;
+float scrollX = 0;
 Rectangle ScreenRect;
 Vector2 fname_size;
 int capacity = 16;
@@ -81,8 +85,8 @@ void cursor(Font usedfont, float fontsize, float startX, float startY, float lin
     char beforeCursor[lines[cursorLine].capacity];
     memcpy(beforeCursor, lines[cursorLine].buffer, cursorColumn);
     beforeCursor[cursorColumn] = '\0';
-    float cursorX = startX + MeasureTextEx(usedfont, beforeCursor, fontsize, 0.8).x;
-    float cursorY = startY + cursorLine * lineHeight;
+    float cursorX = startX -scrollX+ MeasureTextEx(usedfont, beforeCursor, fontsize, 0.8).x;
+    float cursorY = startY + (cursorLine - scrollLine) * lineHeight;
     DrawTextEx(usedfont, "|", (Vector2){cursorX, cursorY}, fontsize , 0, RED);
 }
 
@@ -167,10 +171,10 @@ void drawSelection(Font usedfont, float fontsize) {
         memcpy(selected, &lines[i].buffer[lineStart], lineEnd - lineStart);
         selected[lineEnd - lineStart] = '\0';
 
-        float x = startX + MeasureTextEx(usedfont, beforeStart, fontsize, 0.8).x;
+        float x = startX -scrollX + MeasureTextEx(usedfont, beforeStart, fontsize, 0.8).x;
         float width = MeasureTextEx(usedfont, selected, fontsize, 0.8).x;
 
-        DrawRectangle(x, startY + i * lineHeight, width, lineHeight, BLUE); //selection color here
+        DrawRectangle(x, startY + (i - scrollLine) * lineHeight, width, lineHeight, BLUE); //selection color here
     }
 }
 
@@ -399,6 +403,7 @@ void pasteClipboard(void) {
 }
 
 void navigation(void) {
+
 if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
     IsKeyPressed(KEY_A)) {
     selectionLine = 0;
@@ -469,7 +474,7 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
             cursorLine++;
             cursorColumn = 0;
         }
-
+        scrollKeyboard(cursorLine, lineHeight, ScreenRect.height, &scrollLine);
     }
 
     if (keyRepeat(KEY_LEFT) && !IsKeyDown(KEY_LEFT_CONTROL) && !IsKeyDown(KEY_RIGHT_CONTROL)) {
@@ -641,9 +646,11 @@ void textstuff(Font usedfont, float fontsize) {
     BeginScissorMode(ScreenRect.x, ScreenRect.y, ScreenRect.width, ScreenRect.height);
     selection();
     navigation();
+
+    scrollMouse(lineCount, &scrollLine);
     drawSelection(usedfont, fontsize);
     for (int i = 0; i < lineCount; i++) {
-        DrawTextEx(usedfont,lines[i].buffer,(Vector2){startX,startY + i * lineHeight},fontsize,0.8,WHITE);
+        DrawTextEx(usedfont,lines[i].buffer,(Vector2){startX-scrollX,startY + (i - scrollLine) * lineHeight},fontsize,0.8,WHITE);
 
     }
 
@@ -695,6 +702,16 @@ void textstuff(Font usedfont, float fontsize) {
         cursorColumn++;
         line->buffer[line->length] = '\0';
     }
+    char beforeCursor[lines[cursorLine].capacity];
+    memcpy(beforeCursor, lines[cursorLine].buffer, cursorColumn);
+    beforeCursor[cursorColumn] = '\0';
+
+    float cursorWidth = MeasureTextEx(usedfont, beforeCursor, fontsize, 0.8).x;
+
+    scrollHorizontal(cursorWidth, ScreenRect.width, &scrollX);
     cursor(usedfont, fontsize, startX, startY, lineHeight);
     EndScissorMode();
 }
+
+
+//Todo shift+home, shift+end
