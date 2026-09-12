@@ -2,12 +2,13 @@
 // Created by Mayank Thapar on 10-09-2026.
 //
 
+//include libs
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include "raylib.h"
 
+//inits vars
 Rectangle ScreenRect;
 Vector2 fname_size;
 int capacity = 16;
@@ -23,12 +24,20 @@ typedef struct {
     int length;
     int capacity;
 } Line;
+
 float startX ;
 float startY ;
 float lineHeight ;
 float fonttsize;
+int cursorLine = 0;
+int cursorColumn = 0;
+Line *lines=NULL;
+int lineCount=0;
+int selectionLine = 0;
+int selectionColumn = 0;
+int selecting = 0;
 
-
+//dont ask me bout any of this code. please. i dont know what im doing half the time. thanks.
 void borders(float fontsize,char *filename,Font usedfont) {
      float ribbon_height=fontsize*1.05;
      ScreenRect=(Rectangle){GetScreenWidth()*0.005,ribbon_height*1.4,GetScreenWidth()*0.99,GetScreenHeight()-(ribbon_height*1.4)-GetScreenHeight()*0.01};
@@ -47,10 +56,10 @@ void borders(float fontsize,char *filename,Font usedfont) {
      lineHeight = MeasureTextEx(usedfont, "Jet", fontsize, 0).y;
      fonttsize=fontsize;
 }
-int cursorLine = 0;
-int cursorColumn = 0;
-Line *lines=NULL;
-int lineCount=0;
+double repeatStartTime = 0;
+double repeatNextTime = 0;
+int repeatKey = 0;
+
 
 void addLine(void) {
     lines = realloc(lines, (lineCount + 1) * sizeof(Line));
@@ -77,7 +86,174 @@ void cursor(Font usedfont, float fontsize, float startX, float startY, float lin
     DrawTextEx(usedfont, "|", (Vector2){cursorX, cursorY}, fontsize , 0, RED);
 }
 
+int keyRepeat(int key) {
+    double now = GetTime();
+
+    if (IsKeyPressed(key)) {
+        repeatKey = key;
+        repeatStartTime = now + 0.4;
+        repeatNextTime = now;
+        return 1;
+    }
+
+    if (repeatKey == key && IsKeyDown(key) && now >= repeatStartTime) {
+        if (now >= repeatNextTime) {
+            repeatNextTime = now + 0.05;
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+void selection(void) {
+    if (selecting && IsKeyPressed(KEY_ESCAPE)) {
+        selecting = 0;
+        return;
+    }
+    if (!selecting &&
+        (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) &&
+        (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_RIGHT) ||
+         IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_DOWN))) {
+        selectionLine = cursorLine;
+        selectionColumn = cursorColumn;
+        selecting = 1;
+    }
+
+    if (!IsKeyDown(KEY_LEFT_SHIFT) && !IsKeyDown(KEY_RIGHT_SHIFT) &&
+        selectionLine == cursorLine && selectionColumn == cursorColumn) {
+        selecting = 0;
+    }
+}
+void drawSelection(Font usedfont, float fontsize) {
+    if (!selecting)
+        return;
+
+    int startLine = selectionLine;
+    int startColumn = selectionColumn;
+    int endLine = cursorLine;
+    int endColumn = cursorColumn;
+
+    if (startLine > endLine || (startLine == endLine && startColumn > endColumn)) {
+        int tempLine = startLine;
+        int tempColumn = startColumn;
+
+        startLine = endLine;
+        startColumn = endColumn;
+        endLine = tempLine;
+        endColumn = tempColumn;
+    }
+
+    for (int i = startLine; i <= endLine; i++) {
+        int lineStart;
+        int lineEnd;
+
+        if (i == startLine)
+            lineStart = startColumn;
+        else
+            lineStart = 0;
+
+        if (i == endLine)
+            lineEnd = endColumn;
+        else
+            lineEnd = lines[i].length;
+
+        char beforeStart[lineStart + 1];
+        char selected[lineEnd - lineStart + 1];
+
+        memcpy(beforeStart, lines[i].buffer, lineStart);
+        beforeStart[lineStart] = '\0';
+
+        memcpy(selected, &lines[i].buffer[lineStart], lineEnd - lineStart);
+        selected[lineEnd - lineStart] = '\0';
+
+        float x = startX + MeasureTextEx(usedfont, beforeStart, fontsize, 0.8).x;
+        float width = MeasureTextEx(usedfont, selected, fontsize, 0.8).x;
+
+        DrawRectangle(x, startY + i * lineHeight, width, lineHeight, BLUE); //selection color here
+    }
+}
+
+void deleteSelection(void) {
+    if (!selecting)
+        return;
+
+    int startLine = selectionLine;
+    int startColumn = selectionColumn;
+    int endLine = cursorLine;
+    int endColumn = cursorColumn;
+
+    if (startLine > endLine || (startLine == endLine && startColumn > endColumn)) {
+        int tempLine = startLine;
+        int tempColumn = startColumn;
+
+        startLine = endLine;
+        startColumn = endColumn;
+        endLine = tempLine;
+        endColumn = tempColumn;
+    }
+
+    if (startLine == endLine) {
+        memmove(&lines[startLine].buffer[startColumn],
+                &lines[startLine].buffer[endColumn],
+                lines[startLine].length - endColumn + 1);
+
+        lines[startLine].length -= endColumn - startColumn;
+    }
+
+    else {
+        int firstLength = startColumn;
+        int lastLength = lines[endLine].length - endColumn;
+
+        lines[startLine].capacity = firstLength + lastLength + 1;
+        lines[startLine].buffer = realloc(lines[startLine].buffer, lines[startLine].capacity);
+
+        memcpy(&lines[startLine].buffer[firstLength],
+               &lines[endLine].buffer[endColumn],
+               lastLength + 1);
+
+        lines[startLine].length = firstLength + lastLength;
+
+        for (int i = startLine + 1; i <= endLine; i++) {
+            free(lines[i].buffer);
+        }
+
+        memmove(&lines[startLine + 1],
+                &lines[endLine + 1],
+                (lineCount - endLine - 1) * sizeof(Line));
+
+        lineCount -= endLine - startLine;
+    }
+
+    selecting = 0;
+    cursorLine = startLine;
+    cursorColumn = startColumn;
+}
+
 void navigation(void) {
+
+    if (selecting && !IsKeyDown(KEY_LEFT_SHIFT) && !IsKeyDown(KEY_RIGHT_SHIFT)) {
+
+        if (IsKeyPressed(KEY_LEFT)) {
+            if (selectionLine < cursorLine ||
+                (selectionLine == cursorLine && selectionColumn < cursorColumn)) {
+                cursorLine = selectionLine;
+                cursorColumn = selectionColumn;
+            }
+            selecting = 0;
+            return;
+        }
+
+        if (IsKeyPressed(KEY_RIGHT)) {
+            if (selectionLine > cursorLine ||
+                (selectionLine == cursorLine && selectionColumn > cursorColumn)) {
+                cursorLine = selectionLine;
+                cursorColumn = selectionColumn;
+            }
+            selecting = 0;
+            return;
+        }
+    }
 
     if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) && IsKeyPressed(KEY_LEFT)) {
         while (cursorColumn > 0 && !isWordChar(lines[cursorLine].buffer[cursorColumn - 1]))
@@ -105,7 +281,7 @@ void navigation(void) {
 
     }
 
-    if (IsKeyPressed(KEY_LEFT) && !IsKeyDown(KEY_LEFT_CONTROL) && !IsKeyDown(KEY_RIGHT_CONTROL)) {
+    if (keyRepeat(KEY_LEFT) && !IsKeyDown(KEY_LEFT_CONTROL) && !IsKeyDown(KEY_RIGHT_CONTROL)) {
         if (cursorColumn > 0) {
             cursorColumn--;
         }
@@ -115,7 +291,7 @@ void navigation(void) {
         }
     }
 
-    if (IsKeyPressed(KEY_RIGHT) && !IsKeyDown(KEY_LEFT_CONTROL) && !IsKeyDown(KEY_RIGHT_CONTROL)) {
+    if (keyRepeat(KEY_RIGHT) && !IsKeyDown(KEY_LEFT_CONTROL) && !IsKeyDown(KEY_RIGHT_CONTROL)) {
         if (cursorColumn < lines[cursorLine].length) {
             cursorColumn++;
         }
@@ -155,6 +331,16 @@ void navigation(void) {
     if (IsKeyPressed(KEY_END))
         cursorColumn = lines[cursorLine].length;
 
+    if (selecting && IsKeyPressed(KEY_BACKSPACE)) {
+        deleteSelection();
+        return;
+    }
+
+    if (selecting && IsKeyPressed(KEY_DELETE)) {
+        deleteSelection();
+        return;
+    }
+
     if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) && IsKeyPressed(KEY_BACKSPACE)) {
         int oldColumn = cursorColumn;
         while (cursorColumn > 0 && !isWordChar(lines[cursorLine].buffer[cursorColumn - 1]))
@@ -169,26 +355,16 @@ void navigation(void) {
             int previousLength = lines[cursorLine - 1].length;
             int currentLength = lines[cursorLine].length;
 
-            lines[cursorLine - 1].buffer = realloc(
-                lines[cursorLine - 1].buffer,
-                previousLength + currentLength + 1
-            );
-
-            memcpy(
-                &lines[cursorLine - 1].buffer[previousLength],
-                lines[cursorLine].buffer,
-                currentLength + 1
-            );
+            //lines[cursorLine - 1].buffer = realloc(lines[cursorLine - 1].buffer,previousLength + currentLength + 1);
+            lines[cursorLine - 1].capacity = previousLength + currentLength + 1;
+            lines[cursorLine - 1].buffer = realloc(lines[cursorLine - 1].buffer,lines[cursorLine - 1].capacity);
+            memcpy(&lines[cursorLine - 1].buffer[previousLength],lines[cursorLine].buffer,currentLength + 1);
 
             lines[cursorLine - 1].length += currentLength;
 
             free(lines[cursorLine].buffer);
 
-            memmove(
-                &lines[cursorLine],
-                &lines[cursorLine + 1],
-                (lineCount - cursorLine - 1) * sizeof(Line)
-            );
+            memmove(&lines[cursorLine],&lines[cursorLine + 1],(lineCount - cursorLine - 1) * sizeof(Line));
 
             lineCount--;
             cursorLine--;
@@ -197,7 +373,7 @@ void navigation(void) {
     }
 
 
-    if (IsKeyPressed(KEY_BACKSPACE) && !IsKeyDown(KEY_LEFT_CONTROL) && !IsKeyDown(KEY_RIGHT_CONTROL)) {
+    if (keyRepeat(KEY_BACKSPACE) && !IsKeyDown(KEY_LEFT_CONTROL) && !IsKeyDown(KEY_RIGHT_CONTROL)) {
         if (cursorColumn > 0) {
             memmove(&lines[cursorLine].buffer[cursorColumn - 1],&lines[cursorLine].buffer[cursorColumn],lines[cursorLine].length - cursorColumn + 1);
 
@@ -233,40 +409,24 @@ void navigation(void) {
 
         while (cursorColumn < lines[cursorLine].length && isWordChar(lines[cursorLine].buffer[cursorColumn]))
             cursorColumn++;
+
         memmove(&lines[cursorLine].buffer[oldColumn],&lines[cursorLine].buffer[cursorColumn],lines[cursorLine].length - cursorColumn + 1);
 
         lines[cursorLine].length -= cursorColumn - oldColumn;
         cursorColumn = oldColumn;
-
         if (cursorColumn == lines[cursorLine].length && cursorLine < lineCount - 1) {
             int currentLength = lines[cursorLine].length;
             int nextLength = lines[cursorLine + 1].length;
-
-            lines[cursorLine].buffer = realloc(
-                lines[cursorLine].buffer,
-                currentLength + nextLength + 1
-            );
-
-            memcpy(
-                &lines[cursorLine].buffer[currentLength],
-                lines[cursorLine + 1].buffer,
-                nextLength + 1
-            );
-
+            lines[cursorLine].capacity = currentLength + nextLength + 1;
+            lines[cursorLine].buffer = realloc(lines[cursorLine].buffer,lines[cursorLine].capacity);
+            memcpy(&lines[cursorLine].buffer[currentLength],lines[cursorLine + 1].buffer,nextLength + 1);
             lines[cursorLine].length += nextLength;
-
             free(lines[cursorLine + 1].buffer);
-
-            memmove(
-                &lines[cursorLine + 1],
-                &lines[cursorLine + 2],
-                (lineCount - cursorLine - 2) * sizeof(Line)
-            );
-
+            memmove(&lines[cursorLine + 1],&lines[cursorLine + 2],(lineCount - cursorLine - 2) * sizeof(Line));
             lineCount--;
         }
     }
-    if (IsKeyPressed(KEY_DELETE) && !IsKeyDown(KEY_LEFT_CONTROL) && !IsKeyDown(KEY_RIGHT_CONTROL)) {
+    if (keyRepeat(KEY_DELETE) && !IsKeyDown(KEY_LEFT_CONTROL) && !IsKeyDown(KEY_RIGHT_CONTROL)) {
         if (cursorColumn < lines[cursorLine].length) {
             memmove(&lines[cursorLine].buffer[cursorColumn],&lines[cursorLine].buffer[cursorColumn + 1],lines[cursorLine].length - cursorColumn);
 
@@ -275,42 +435,33 @@ void navigation(void) {
         else if (cursorLine < lineCount - 1) {
             int currentLength = lines[cursorLine].length;
             int nextLength = lines[cursorLine + 1].length;
-
-            lines[cursorLine].buffer = realloc(lines[cursorLine].buffer,currentLength + nextLength + 1);
-
-            memcpy(
-                &lines[cursorLine].buffer[currentLength],lines[cursorLine + 1].buffer,nextLength + 1);
-
+            lines[cursorLine].capacity = currentLength + nextLength + 1;
+            lines[cursorLine].buffer = realloc(lines[cursorLine].buffer,lines[cursorLine].capacity);
+            memcpy(&lines[cursorLine].buffer[currentLength],lines[cursorLine + 1].buffer,nextLength + 1);
             lines[cursorLine].length += nextLength;
-
             free(lines[cursorLine + 1].buffer);
-
             memmove(&lines[cursorLine + 1],&lines[cursorLine + 2],(lineCount - cursorLine - 2) * sizeof(Line));
-
             lineCount--;
         }
     }
-
-
-
 }
 
 void textstuff(Font usedfont, float fontsize) {
-
-
-
     BeginScissorMode(ScreenRect.x, ScreenRect.y, ScreenRect.width, ScreenRect.height);
+    selection();
     navigation();
+    drawSelection(usedfont, fontsize);
     for (int i = 0; i < lineCount; i++) {
-
         DrawTextEx(usedfont,lines[i].buffer,(Vector2){startX,startY + i * lineHeight},fontsize,0.8,WHITE);
 
     }
 
 
     int keypressed = GetCharPressed();
-
     while (keypressed > 0) {
+        if (selecting && keypressed > 0) {
+            deleteSelection();
+        }
         Line *line = &lines[cursorLine];
 
         if (line->length + 1 >= line->capacity) {
@@ -319,37 +470,39 @@ void textstuff(Font usedfont, float fontsize) {
         }
         memmove(&line->buffer[cursorColumn + 1],&line->buffer[cursorColumn],line->length - cursorColumn + 1);
         line->buffer[cursorColumn] = (char)keypressed;
-
         line->length++;
         cursorColumn++;
-
         line->buffer[line->length] = '\0';
-
         keypressed = GetCharPressed();
     }
+    // Hello World
     if (IsKeyPressed(KEY_ENTER)) {
         int remainingLength = lines[cursorLine].length - cursorColumn;
-
         addLine();
-
         if (remainingLength + 1 > lines[cursorLine + 1].capacity) {
             lines[cursorLine + 1].capacity = remainingLength + 1;
-            lines[cursorLine + 1].buffer = realloc(
-                lines[cursorLine + 1].buffer,
-                lines[cursorLine + 1].capacity
-            );
+            lines[cursorLine + 1].buffer = realloc(lines[cursorLine + 1].buffer,lines[cursorLine + 1].capacity);
         }
 
-        memmove(lines[cursorLine + 1].buffer,
-                &lines[cursorLine].buffer[cursorColumn],
-                remainingLength + 1);
-
+        memmove(lines[cursorLine + 1].buffer,&lines[cursorLine].buffer[cursorColumn],remainingLength + 1);
         lines[cursorLine + 1].length = remainingLength;
-
         lines[cursorLine].buffer[cursorColumn] = '\0';
         lines[cursorLine].length = cursorColumn;
         cursorLine++;
         cursorColumn = 0;
+    }
+    if (IsKeyPressed(KEY_TAB)) {
+        Line *line = &lines[cursorLine];
+        if (line->length + 1 >= line->capacity) {
+            line->capacity *= 2;
+            line->buffer = realloc(line->buffer, line->capacity);
+        }
+
+        memmove(&line->buffer[cursorColumn + 1],&line->buffer[cursorColumn],line->length - cursorColumn + 1);
+        line->buffer[cursorColumn] = '\t';
+        line->length++;
+        cursorColumn++;
+        line->buffer[line->length] = '\0';
     }
     cursor(usedfont, fontsize, startX, startY, lineHeight);
     EndScissorMode();

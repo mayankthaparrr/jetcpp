@@ -29,6 +29,7 @@ int main() {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(1000, 800, "Jet C++");
     SetTargetFPS(60);
+    SetExitKey(KEY_NULL);
 
 
     addLine();
