@@ -14,7 +14,7 @@ void drawRibbon(Color,Font,float);
 void borders(float,char *,Font);
 Font Roboto;
 float fontsize;
-
+Font IBM;
 
 
 int main() {
@@ -33,6 +33,7 @@ int main() {
 
     addLine();
     Roboto=LoadFont("C:/DEV/ATR/Roboto-Regular.ttf");
+    IBM=LoadFont("C:/DEV/ATR/Px437_IBM_VGA_9x16.ttf");
 
     Font usedfont=Roboto;
     SetTextureFilter(usedfont.texture, TEXTURE_FILTER_BILINEAR);
