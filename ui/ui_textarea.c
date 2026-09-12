@@ -230,8 +230,199 @@ void deleteSelection(void) {
     cursorColumn = startColumn;
 }
 
-void navigation(void) {
+void copySelection(void) {
+    if (!selecting)
+        return;
 
+    int startLine = selectionLine;
+    int startColumn = selectionColumn;
+    int endLine = cursorLine;
+    int endColumn = cursorColumn;
+
+    if (startLine > endLine || (startLine == endLine && startColumn > endColumn)) {
+        int tempLine = startLine;
+        int tempColumn = startColumn;
+
+        startLine = endLine;
+        startColumn = endColumn;
+        endLine = tempLine;
+        endColumn = tempColumn;
+    }
+
+    int totalLength = 0;
+
+    for (int i = startLine; i <= endLine; i++) {
+        if (i == startLine && i == endLine)
+            totalLength += endColumn - startColumn;
+        else if (i == startLine)
+            totalLength += lines[i].length - startColumn + 1;
+        else if (i == endLine)
+            totalLength += endColumn + 1;
+        else
+            totalLength += lines[i].length + 1;
+    }
+
+    char *copy = malloc(totalLength + 1);
+    int position = 0;
+
+    for (int i = startLine; i <= endLine; i++) {
+        int lineStart;
+        int lineEnd;
+
+        if (i == startLine)
+            lineStart = startColumn;
+        else
+            lineStart = 0;
+
+        if (i == endLine)
+            lineEnd = endColumn;
+        else
+            lineEnd = lines[i].length;
+
+        memcpy(&copy[position],
+               &lines[i].buffer[lineStart],
+               lineEnd - lineStart);
+
+        position += lineEnd - lineStart;
+
+        if (i != endLine)
+            copy[position++] = '\n';
+    }
+
+    copy[position] = '\0';
+
+    SetClipboardText(copy);
+    free(copy);
+}
+
+void pasteClipboard(void) {
+    const char *clipboard = GetClipboardText();
+
+    if (clipboard == NULL || clipboard[0] == '\0')
+        return;
+
+    int pasteLength = strlen(clipboard);
+
+    if (strchr(clipboard, '\n') == NULL) {
+        Line *line = &lines[cursorLine];
+
+        if (line->length + pasteLength + 1 > line->capacity) {
+            line->capacity = line->length + pasteLength + 1;
+            line->buffer = realloc(line->buffer, line->capacity);
+        }
+
+        memmove(&line->buffer[cursorColumn + pasteLength],
+                &line->buffer[cursorColumn],
+                line->length - cursorColumn + 1);
+
+        memcpy(&line->buffer[cursorColumn], clipboard, pasteLength);
+
+        line->length += pasteLength;
+        cursorColumn += pasteLength;
+        return;
+    }
+
+    int beforeLength = cursorColumn;
+    int afterLength = lines[cursorLine].length - cursorColumn;
+
+    char *before = malloc(beforeLength + 1);
+    char *after = malloc(afterLength + 1);
+
+    memcpy(before, lines[cursorLine].buffer, beforeLength);
+    before[beforeLength] = '\0';
+
+    memcpy(after, &lines[cursorLine].buffer[cursorColumn], afterLength);
+    after[afterLength] = '\0';
+
+    int newLines = 1;
+
+    for (int i = 0; clipboard[i] != '\0'; i++) {
+        if (clipboard[i] == '\n')
+            newLines++;
+    }
+
+    int oldLineCount = lineCount;
+
+    lines = realloc(lines, (lineCount + newLines - 1) * sizeof(Line));
+
+    memmove(&lines[cursorLine + newLines],
+            &lines[cursorLine + 1],
+            (oldLineCount - cursorLine - 1) * sizeof(Line));
+
+    lineCount += newLines - 1;
+
+    int currentLine = cursorLine;
+    const char *start = clipboard;
+
+    for (int i = 0; i < newLines; i++) {
+        const char *newline = strchr(start, '\n');
+        int length;
+
+        if (newline != NULL)
+            length = newline - start;
+        else
+            length = strlen(start);
+
+        int extra = (i == 0 ? beforeLength : 0) +
+                    (i == newLines - 1 ? afterLength : 0);
+
+        lines[currentLine + i].length = length + extra;
+        lines[currentLine + i].capacity = lines[currentLine + i].length + 1;
+        lines[currentLine + i].buffer = malloc(lines[currentLine + i].capacity);
+
+        int position = 0;
+
+        if (i == 0) {
+            memcpy(lines[currentLine + i].buffer, before, beforeLength);
+            position += beforeLength;
+        }
+
+        memcpy(&lines[currentLine + i].buffer[position], start, length);
+        position += length;
+
+        if (i == newLines - 1) {
+            memcpy(&lines[currentLine + i].buffer[position], after, afterLength);
+            position += afterLength;
+        }
+
+        lines[currentLine + i].buffer[position] = '\0';
+
+        if (newline != NULL)
+            start = newline + 1;
+    }
+
+    free(before);
+    free(after);
+
+    cursorLine += newLines - 1;
+    cursorColumn = lines[cursorLine].length - afterLength;
+}
+
+void navigation(void) {
+if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
+    IsKeyPressed(KEY_A)) {
+    selectionLine = 0;
+    selectionColumn = 0;
+    cursorLine = lineCount - 1;
+    cursorColumn = lines[cursorLine].length;
+    selecting = 1;
+    return;
+}
+    if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
+        IsKeyPressed(KEY_C)) {
+        copySelection();
+        }
+    if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
+        IsKeyPressed(KEY_X) && selecting) {
+        copySelection();
+        deleteSelection();
+        return;
+    }
+    if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
+        IsKeyPressed(KEY_V)) {
+        pasteClipboard();
+        return;
+    }
     if (selecting && !IsKeyDown(KEY_LEFT_SHIFT) && !IsKeyDown(KEY_RIGHT_SHIFT)) {
 
         if (IsKeyPressed(KEY_LEFT)) {
