@@ -42,9 +42,10 @@ int selectionColumn = 0;
 int selecting = 0;
 
 //dont ask me bout any of this code. please. i dont know what im doing half the time. thanks.
+
 void borders(float fontsize,char *filename,Font usedfont) {
      float ribbon_height=fontsize*1.05;
-     ScreenRect=(Rectangle){GetScreenWidth()*0.005,ribbon_height*1.4,GetScreenWidth()*0.99,GetScreenHeight()-(ribbon_height*1.4)-GetScreenHeight()*0.01};
+     ScreenRect=(Rectangle){(GetScreenWidth()*0.005),ribbon_height*1.4,(GetScreenWidth()*0.99)-15,GetScreenHeight()-(ribbon_height*1.4)-20-GetScreenHeight()*0.01};
      DrawRectangleLinesEx(ScreenRect,2,WHITE);
      ScreenRect.x+=5;
      ScreenRect.y+=5;
@@ -64,13 +65,16 @@ double repeatStartTime = 0;
 double repeatNextTime = 0;
 int repeatKey = 0;
 
-
-void addLine(void) {
+void addLine(int position) {
     lines = realloc(lines, (lineCount + 1) * sizeof(Line));
-    lines[lineCount].capacity = 16;
-    lines[lineCount].length = 0;
-    lines[lineCount].buffer = malloc(lines[lineCount].capacity);
-    lines[lineCount].buffer[0] = '\0';
+
+    memmove(&lines[position + 1], &lines[position], (lineCount - position) * sizeof(Line));
+
+    lines[position].capacity = 16;
+    lines[position].length = 0;
+    lines[position].buffer = malloc(lines[position].capacity);
+    lines[position].buffer[0] = '\0';
+
     lineCount++;
 }
 
@@ -643,8 +647,21 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
 }
 
 void textstuff(Font usedfont, float fontsize) {
-    BeginScissorMode(ScreenRect.x, ScreenRect.y, ScreenRect.width, ScreenRect.height);
     selection();
+
+    float contentWidth = 0;
+
+    for (int i = 0; i < lineCount; i++) {
+        float width = MeasureTextEx(usedfont,lines[i].buffer,fontsize,0.8).x;
+
+        if (width > contentWidth)
+            contentWidth = width;
+    }
+    scrollbarHorizontal(startX,ScreenRect.y + ScreenRect.height,ScreenRect.width,contentWidth,scrollX);
+
+
+    BeginScissorMode(ScreenRect.x, ScreenRect.y+20, ScreenRect.width, ScreenRect.height-20);
+
     navigation();
 
     scrollMouse(lineCount, &scrollLine);
@@ -676,7 +693,7 @@ void textstuff(Font usedfont, float fontsize) {
     // Hello World
     if (IsKeyPressed(KEY_ENTER)) {
         int remainingLength = lines[cursorLine].length - cursorColumn;
-        addLine();
+        addLine(cursorLine + 1);
         if (remainingLength + 1 > lines[cursorLine + 1].capacity) {
             lines[cursorLine + 1].capacity = remainingLength + 1;
             lines[cursorLine + 1].buffer = realloc(lines[cursorLine + 1].buffer,lines[cursorLine + 1].capacity);
@@ -711,6 +728,7 @@ void textstuff(Font usedfont, float fontsize) {
     scrollHorizontal(cursorWidth, ScreenRect.width, &scrollX);
     cursor(usedfont, fontsize, startX, startY, lineHeight);
     EndScissorMode();
+    scrollbar(ScreenRect.y,ScreenRect.height,lineCount,lineHeight,&scrollLine);
 }
 
 
