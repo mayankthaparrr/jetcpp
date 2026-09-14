@@ -1,7 +1,7 @@
 //
 // Created by Mayank Thapar on 10-09-2026.
 //
-
+//this is ui_textarea.c
 //include libs
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,13 +40,24 @@ int lineCount=0;
 int selectionLine = 0;
 int selectionColumn = 0;
 int selecting = 0;
+float ribbon_height=5;
+Rectangle ScreenRect;
 
 //dont ask me bout any of this code. please. i dont know what im doing half the time. thanks.
+float vertscroll=0;
+float horscroll=0;
+float terminal_height=0;
+void initrect() {
+    ScreenRect=(Rectangle){GetScreenWidth()*0.005,ribbon_height*1.4,GetScreenWidth()*0.99,GetScreenHeight()-ribbon_height*2.8};
+    ScreenRect.width-=vertscroll;
+    ScreenRect.height-=horscroll;
+    ScreenRect.height-=terminal_height;
+}
 
 void borders(float fontsize,char *filename,Font usedfont) {
-     float ribbon_height=fontsize*1.05;
-     ScreenRect=(Rectangle){(GetScreenWidth()*0.005),ribbon_height*1.4,(GetScreenWidth()*0.99)-15,GetScreenHeight()-(ribbon_height*1.4)-20-GetScreenHeight()*0.01};
-     DrawRectangleLinesEx(ScreenRect,2,WHITE);
+    initrect();
+    ribbon_height=fontsize*1.05;
+    DrawRectangleLinesEx(ScreenRect,2,WHITE);
      ScreenRect.x+=5;
      ScreenRect.y+=5;
      ScreenRect.width-=10;
@@ -657,10 +668,10 @@ void textstuff(Font usedfont, float fontsize) {
         if (width > contentWidth)
             contentWidth = width;
     }
-    scrollbarHorizontal(startX,ScreenRect.y + ScreenRect.height,ScreenRect.width,contentWidth,scrollX);
+    horscroll=scrollbarHorizontal(startX,ScreenRect.y + ScreenRect.height,ScreenRect.width-5,contentWidth,&scrollX);
 
 
-    BeginScissorMode(ScreenRect.x, ScreenRect.y+20, ScreenRect.width, ScreenRect.height-20);
+    BeginScissorMode(ScreenRect.x, ScreenRect.y+20, ScreenRect.width-3, ScreenRect.height-20);
 
     navigation();
 
@@ -724,11 +735,14 @@ void textstuff(Font usedfont, float fontsize) {
     beforeCursor[cursorColumn] = '\0';
 
     float cursorWidth = MeasureTextEx(usedfont, beforeCursor, fontsize, 0.8).x;
-
+    if (GetKeyPressed() != 0) {
     scrollHorizontal(cursorWidth, ScreenRect.width, &scrollX);
+        // some key was pressed
+    }
     cursor(usedfont, fontsize, startX, startY, lineHeight);
     EndScissorMode();
-    scrollbar(ScreenRect.y,ScreenRect.height,lineCount,lineHeight,&scrollLine);
+    vertscroll=scrollbar(ScreenRect.y,ScreenRect.height,lineCount,lineHeight,&scrollLine);
+    //terminal_height=make_terminal(ScreenRect.height);
 }
 
 

@@ -262,6 +262,10 @@ void drawRibbon(Color color, Font usedfont, float fontsize) {
     }
     // handle hover AFTER all rectangles exist
     handleRibbonHover();
+
+
+    Rectangle bottomRibbon = {0,GetScreenHeight()-(fontsize),GetScreenWidth(),fontsize};
+    DrawRectangleRec(bottomRibbon,color);
 }
 
 void handleRibbonEvents(Rectangle rect,char *option) {

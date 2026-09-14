@@ -1,12 +1,14 @@
 //
 // Created by Mayank Thapar on 12-09-2026.
 //
-
+//this is ui_scroll.c
 #include "ui_scroll.h"
 #include "raylib.h"
 
 int draggingScrollbar = 0;
 float scrollbarGrabOffset = 0;
+int draggingHorizontalScrollbar = 0;
+float horizontalScrollbarGrabOffset = 0;
 
 void scrollKeyboard(int cursorLine, float lineHeight, float screenHeight, int *scrollLine) {
     int visibleLines = screenHeight / lineHeight;
@@ -24,16 +26,16 @@ void scrollMouse(int lineCount, int *scrollLine) {
     float wheel = GetMouseWheelMove();
     if (wheel != 0) {
         *scrollLine -= (int)(wheel * 3);
+        if (*scrollLine > lineCount - 1)
+            *scrollLine = lineCount - 1;
 
         if (*scrollLine < 0)
             *scrollLine = 0;
-
-        if (*scrollLine > lineCount - 1)
-            *scrollLine = lineCount - 1;
     }
 }
 
 void scrollHorizontal(float cursorWidth, float screenWidth, float *scrollX) {
+    screenWidth-=20;
     if (cursorWidth - *scrollX > screenWidth)
         *scrollX = cursorWidth - screenWidth;
 
@@ -46,7 +48,7 @@ void scrollHorizontal(float cursorWidth, float screenWidth, float *scrollX) {
 
 }
 
-void scrollbar(float posy,float height,int linecount,float lineheight,int *scrollLine){
+float scrollbar(float posy,float height,int linecount,float lineheight,int *scrollLine){
 
     float thumbHeight = (height * (height / lineheight) / linecount);
 
@@ -106,15 +108,22 @@ void scrollbar(float posy,float height,int linecount,float lineheight,int *scrol
     if (thumbY > posy - 5 + height - thumbHeight)
         thumbY = posy - 5 + height - thumbHeight;
 
-    thumbHeight*=1.007;
-    Rectangle Column ={GetScreenWidth()-15,posy-5,10,height};
-    Rectangle Thumb ={GetScreenWidth()-15,thumbY,10,thumbHeight};
-
-    DrawRectangleRounded(Column,0.4,0,SKYBLUE);
-    DrawRectangleRounded(Thumb,0.4,0,WHITE);
+    //thumbHeight*=1.007;
+    if (thumbHeight<height) {
+        Rectangle Column ={GetScreenWidth()-15,posy-5,10,height};
+        Rectangle Thumb ={GetScreenWidth()-15,thumbY,10,thumbHeight};
+        DrawRectangleRounded(Column,0.5,0,SKYBLUE);
+        DrawRectangleRounded(Thumb,0.5,0,WHITE);
+        return 15;
+    }
+    else {
+        return 0;
+    }
 
 }
-void scrollbarHorizontal(float posx,float posy,float width,float contentWidth,float scrollX) {
+float scrollbarHorizontal(float posx,float posy,float width,float contentWidth,float *scrollX) {
+
+
     float thumbWidth = width * width / contentWidth;
     if (thumbWidth > width)
         thumbWidth = width;
@@ -122,12 +131,46 @@ void scrollbarHorizontal(float posx,float posy,float width,float contentWidth,fl
     float thumbX = posx;
 
     if (maxScroll > 0)
-        thumbX += (scrollX / maxScroll) * (width - thumbWidth);
+        thumbX += (*scrollX / maxScroll) * (width - thumbWidth);
 
-    Rectangle Column = {posx,posy+10,width,10};
+    Rectangle Column = {posx*0.5,posy+10,width,10};
     Rectangle Thumb = {thumbX,posy+10,thumbWidth,10};
+
+
+    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
+    CheckCollisionPointRec(GetMousePosition(), Thumb)) {
+        draggingHorizontalScrollbar = 1;
+        horizontalScrollbarGrabOffset = GetMouseX() - thumbX;
+    }
+
+    if (!IsMouseButtonDown(MOUSE_LEFT_BUTTON))
+        draggingHorizontalScrollbar = 0;
+
+    if (draggingHorizontalScrollbar && maxScroll > 0) {
+        thumbX = GetMouseX() - horizontalScrollbarGrabOffset;
+
+        if (thumbX < posx)
+            thumbX = posx;
+
+        if (thumbX > posx + width - thumbWidth)
+            thumbX = posx + width - thumbWidth;
+
+        *scrollX = ((thumbX - posx) / (width - thumbWidth)) * maxScroll;
+        Thumb.x = thumbX;
+    }
+
+
+
     if (thumbWidth < width) {
         DrawRectangleRounded(Column,0.5,0,SKYBLUE);
         DrawRectangleRounded(Thumb,0.5,0,WHITE);
+        return 10;
     }
+    else {
+        return 0;
+    }
+
+}
+float make_terminal(float ScreenHeight){
+    return ScreenHeight*0.4;
 }
