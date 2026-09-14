@@ -4,6 +4,7 @@
 //this is ui_scroll.c
 #include "ui_scroll.h"
 #include "raylib.h"
+#include "ui_textarea.h" // zoom
 
 int draggingScrollbar = 0;
 float scrollbarGrabOffset = 0;
@@ -33,9 +34,17 @@ void scrollMouse(int lineCount, float viewHeight, float lineHeight, int *scrollL
         return;
     }
 
-    // Ctrl+wheel scrolls horizontally (in pixels), matching the vertical
-    // sign convention: wheel up shows earlier content (scrolls left).
+    // Ctrl+wheel: zoom in/out. Wheel up = zoom in (standard convention).
     if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {
+        zoom += wheel * 0.1f;
+        if (zoom < 0.5f) zoom = 0.5f;
+        if (zoom > 4.0f) zoom = 4.0f;
+        return;
+    }
+
+    // Shift+wheel scrolls horizontally (in pixels), matching the vertical
+    // sign convention: wheel up shows earlier content (scrolls left).
+    if (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) {
         hWheelAccumulator += wheel * lineHeight * 3.0f;
 
         int move = (int)hWheelAccumulator; // truncates toward zero

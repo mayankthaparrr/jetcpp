@@ -21,5 +21,6 @@ extern int selecting;
 extern int scrollLine;
 extern int scrollColumn;
 extern float scrollX;
+extern float zoom;
 
 #endif

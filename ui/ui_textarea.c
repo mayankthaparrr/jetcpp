@@ -40,6 +40,7 @@ int lineCount=0;
 int selectionLine = 0;
 int selectionColumn = 0;
 int selecting = 0;
+float zoom = 1.0f; // font size multiplier (Ctrl+wheel / Ctrl+'+')
 float ribbon_height=5;
 Rectangle ScreenRect;
 
@@ -427,6 +428,26 @@ void pasteClipboard(void) {
 }
 
 void navigation(void) {
+
+    // Ctrl+'+' (main-row '=' or keypad '+'): zoom in.
+    if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
+        (IsKeyPressed(KEY_EQUAL) || IsKeyPressed(KEY_KP_ADD))) {
+        zoom *= 1.1f;
+        if (zoom > 4.0f) zoom = 4.0f;
+    }
+
+    // Ctrl+'-' (main-row or keypad): zoom out.
+    if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
+        (IsKeyPressed(KEY_MINUS) || IsKeyPressed(KEY_KP_SUBTRACT))) {
+        zoom /= 1.1f;
+        if (zoom < 0.5f) zoom = 0.5f;
+    }
+
+    // Ctrl+0 (main-row or keypad): reset zoom to 100%.
+    if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
+        (IsKeyPressed(KEY_ZERO) || IsKeyPressed(KEY_KP_0))) {
+        zoom = 1.0f;
+    }
 
 if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
     IsKeyPressed(KEY_A)) {

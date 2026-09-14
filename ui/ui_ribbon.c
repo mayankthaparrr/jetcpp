@@ -17,16 +17,13 @@ typedef struct {
     float posy;
 } ribbonItems;
 
-ribbonItems items[10]={
+ribbonItems items[7]={
     { 'F',"ile"},
     {'E',"dit"},
     {'S',"earch"},
     {'R',"un"},
-    {'C',"ompile"},
-    {'D',"ebug"},
     {'P',"roject"},
     {'O',"ptions"},
-    {'W',"indow"},
     {'H',"elp"}
 };
 
@@ -36,14 +33,11 @@ typedef struct {
     int highlight;
 }ribbonOptions;
 
-ribbonOptions file[8]={
+ribbonOptions file[5]={
     {"New",0},
     {"Open",0},
     {"Save",0},
     {"Save As",0},
-    {"Save All",0},
-    {"Change Directory",0},
-    {"Print",0},
     {"Quit",0}
 };
 
@@ -54,89 +48,40 @@ ribbonOptions edit[7]={
     {"Copy",0},
     {"Paste",0},
     {"Clear",0},
-    {"Show Clipboard",0}
+    {"Select All",0}
 };
-ribbonOptions search[7]={
+ribbonOptions search[4]={
     {"Find",0},
+    {"Find Next",0},
     {"Replace",0},
-{"Search again",0},
-    {"Go To Line Number",0},
-    {"Previous Error",0},
-    {"Next Error",0},
-    {"Locate Error",0}
+    {"Go To Line",0}
 };
 
-ribbonOptions run[6]={
-    {"Run",0},
-    {"Program reset",0},
-    {"Go to Cursor",0},
-    {"Trace into",0},
-    {"Step over",0},
-    {"Arguements",0}
-};
-
-ribbonOptions compile[6] = {
+ribbonOptions run[4]={
     {"Compile",0},
-    {"Make",0},
-    {"Link",0},
-    {"Build All",0},
-    {"Information",0},
-    {"Remove Messages",0}
-};
-ribbonOptions debug[6] = {
-    {"Inspect",0},
-    {"Evaluate/Modify",0},
-    {"Call Stack",0},
-    {"Watches",0},
-    {"Toggle Breakpoint",0},
-    {"Breakpoints..",0}
+    {"Run",0},
+    {"Arguments",0},
+    {"Stop",0}
 };
 
-ribbonOptions project[6]={
+ribbonOptions project[5]={
     {"Open Project",0},
     {"Close Project",0},
     {"Add Item",0},
     {"Delete Item",0},
-    {"Local Options",0},
     {"Include Files",0}
 };
-ribbonOptions options[10]={
-    {"Application",0},
-    {"Compiler",0},
-    {"Transfer",0},
-    {"Make",0},
-    {"Linker",0},
-    {"Librarian",0},
-    {"Debugger",0},
+
+ribbonOptions options[6]={
     {"Directories",0},
+    {"Compiler",0},
+    {"Linker",0},
+    {"Debugger",0},
     {"Environment",0},
     {"Save",0}
 };
 
-ribbonOptions window[15]={
-    {"Size/Move",0},
-    {"Zoom",0},
-    {"Tile",0},
-    {"Cascade",0},
-    {"Next",0},
-    {"Close",0},
-    {"Close All",0},
-    {"Message",0},
-    {"Output",0},
-    {"Watch",0},
-    {"User Screen",0},
-    {"Register",0},
-    {"Project",0},
-    {"Project Notes",0},
-    {"List All",0}
-};
-
-ribbonOptions help[6]={
-    {"Contents",0},
-    {"Index",0},
-    {"Topic Search",0},
-    {"Previous Topic",0},
-    {"Help on Help",0},
+ribbonOptions help[1]={
     {"About",0}
 };
 Vector2 mouse;
@@ -155,7 +100,10 @@ void drawMenu(ribbonOptions option[],int i,Color color, Font usedfont,float font
     }
     width*=1.1;
 
-    DrawRectangleRounded((Rectangle){posx2,MeasureTextEx(usedfont,options[i].name,fontsize,0).y-15,width,height+15},0.1,1,color);
+    // Background height must be measured from THIS menu's items, not the
+    // (unrelated) `options` array — indexing options[i] by item count used
+    // to read out of bounds for the larger menus.
+    DrawRectangleRounded((Rectangle){posx2,MeasureTextEx(usedfont,option[0].name,fontsize,0).y-15,width,height+15},0.1,1,color);
     float sposx=posx2*1.01;
     float nposx=sposx+(width*0.90);
 
@@ -185,16 +133,13 @@ void drawMenu(ribbonOptions option[],int i,Color color, Font usedfont,float font
 void selectMenu(int i, Color color, Font usedfont, float fontsize) {
     int j;
     switch (i) {
-            case 1:j=8;drawMenu(file,j,color,usedfont,fontsize,items[0].x);break;//file
+            case 1:j=5;drawMenu(file,j,color,usedfont,fontsize,items[0].x);break;//file
             case 2:j=7;drawMenu(edit,j,color,usedfont,fontsize,items[1].x);break;//edit
-            case 3:j=7;drawMenu(search,j,color,usedfont,fontsize,items[2].x);break;//search
-            case 4: j=6;drawMenu(run,j,color,usedfont,fontsize,items[3].x);break;//run
-            case 5: j=6; drawMenu(compile,j,color,usedfont,fontsize,items[4].x); break;//compile
-            case 6: j=6; drawMenu(debug,j,color,usedfont,fontsize,items[5].x);break;//debug
-            case 7: j=6; drawMenu(project,j,color,usedfont,fontsize,items[6].x);break;//project
-            case 8: j=10; drawMenu(options,j,color,usedfont,fontsize,items[7].x);break;//options
-            case 9: j=15; drawMenu(window,j,color,usedfont,fontsize,items[8].x);break;//window
-            case 10: j=6; drawMenu(help,j,color,usedfont,fontsize,items[9].x); break;//help
+            case 3:j=4;drawMenu(search,j,color,usedfont,fontsize,items[2].x);break;//search
+            case 4:j=4;drawMenu(run,j,color,usedfont,fontsize,items[3].x);break;//run
+            case 5:j=5;drawMenu(project,j,color,usedfont,fontsize,items[4].x);break;//project
+            case 6:j=6;drawMenu(options,j,color,usedfont,fontsize,items[5].x);break;//options
+            case 7:j=1;drawMenu(help,j,color,usedfont,fontsize,items[6].x);break;//help
     }
 }
 
@@ -209,7 +154,7 @@ void handleRibbonHover(void) {
     Vector2 mouse = GetMousePosition();
     int overRibbon=0;
 
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 7; i++) {
         if (CheckCollisionPointRec(mouse, items[i].rect)) {
             activeMenu = i + 1;
             return;
@@ -230,7 +175,7 @@ void drawRibbon(Color color, Font usedfont, float fontsize) {
     DrawRectangle(0, 0, GetScreenWidth(), fontsize * 1.05, color);
     int posx2 = posx;
 
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 7; i++) {
         char c[2] = {items[i].first_letter, '\0'};
         int width = MeasureTextEx(usedfont, c, fontsize, 0).x;
         width += MeasureTextEx(usedfont, items[i].remains, fontsize, 0).x;
@@ -295,8 +240,14 @@ void handleRibbonEvents(Rectangle rect,char *option) {
                 saveas();
             }
 
-            if (strcmp(option,"Save All") == 0) {
-                saveall();
+            if (strcmp(option,"Quit") == 0) {
+                // raylib 5.5 has no SetWindowShouldClose(), so flag the
+                // request and let the main loop exit cleanly after the frame.
+                quitRequested = 1;
+            }
+
+            if (strcmp(option,"Select All") == 0) {
+                selectall();
             }
         }
     }

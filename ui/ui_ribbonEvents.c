@@ -9,6 +9,7 @@
 #include <nfd.h>
 
 char *filename = "NONAME.C";
+int quitRequested = 0; // set by File -> Quit; checked in the main loop
 static int filenameAllocated = 0;
 
 // Full path of the file backing the current buffer (NULL if never saved).
@@ -95,6 +96,14 @@ void newfile() {
     setFilepath(NULL);
 }
 
+void selectall() {
+    selectionLine = 0;
+    selectionColumn = 0;
+    cursorLine = lineCount - 1;
+    cursorColumn = lines[cursorLine].length;
+    selecting = 1;
+}
+
 void openfile() {
     nfdchar_t *outPath = NULL;
     if (NFD_OpenDialog(&outPath, NULL, 0, NULL) != NFD_OKAY) {
@@ -179,9 +188,4 @@ void saveas() {
         setFilename(baseNameOf(target));
     }
     if (outPath) NFD_FreePath(outPath);
-}
-
-void saveall() {
-    // Single document for now, so same as Save.
-    savefile();
 }

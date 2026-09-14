@@ -16,6 +16,7 @@ void drawRibbon(Color,Font,float);
 void borders(float,char *,Font);
 Font Roboto;
 float fontsize;
+float basefont; // unzoomed size used for the ribbon; fontsize = basefont * zoom
 Font IBM;
 
 
@@ -44,18 +45,20 @@ int main() {
     Color greyy = GetColor(0xada8acff);
     NFD_Init();
     //Loop
-    while (!WindowShouldClose()) {
+    while (!WindowShouldClose() && !quitRequested) {
         if (GetScreenWidth()>1200) {
-            fontsize=30;
+            basefont=30;
         }
         else {
-            fontsize=25;
+            basefont=25;
         }
+        fontsize=basefont*zoom; // zoom factor set by Ctrl+wheel / Ctrl+'+'
+        // (ribbon stays at basefont: menus shouldn't scale with zoom)
         BeginDrawing();
         ClearBackground(tooblue);
         borders(fontsize,filename,usedfont);
         textstuff(usedfont,fontsize);
-        drawRibbon(greyy,usedfont,fontsize);
+        drawRibbon(greyy,usedfont,basefont);
         EndDrawing();
 
     }
