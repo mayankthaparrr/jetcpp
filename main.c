@@ -7,6 +7,8 @@
 #include <string.h>
 #include "ui/ui_ribbon.h"
 #include "ui/ui_textarea.h"
+#include "ui/ui_ribbonEvents.h"
+#include <nfd.h>
 
 void addLine(int);
 
@@ -40,7 +42,7 @@ int main() {
     SetTextureFilter(usedfont.texture, TEXTURE_FILTER_BILINEAR);
     Color tooblue = GetColor(0x0000aaff);
     Color greyy = GetColor(0xada8acff);
-    char *filename = "NONAME.C";
+    NFD_Init();
     //Loop
     while (!WindowShouldClose()) {
         if (GetScreenWidth()>1200) {
@@ -57,5 +59,6 @@ int main() {
         EndDrawing();
 
     }
+    NFD_Quit();
     return 0;
 }

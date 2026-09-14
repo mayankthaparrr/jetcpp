@@ -4,6 +4,7 @@
 
 #ifndef ATR_UI_RIBBONEVENTS_H
 #define ATR_UI_RIBBONEVENTS_H
+extern char *filename;
 void newfile(void);
 void openfile(void);
 void savefile(void);

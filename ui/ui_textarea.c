@@ -368,6 +368,10 @@ void pasteClipboard(void) {
             &lines[cursorLine + 1],
             (oldLineCount - cursorLine - 1) * sizeof(Line));
 
+    // The slot at cursorLine still holds the old line's buffer; free it
+    // before the loop below replaces it with fresh allocations.
+    free(lines[cursorLine].buffer);
+
     lineCount += newLines - 1;
 
     int currentLine = cursorLine;
@@ -381,6 +385,11 @@ void pasteClipboard(void) {
             length = newline - start;
         else
             length = strlen(start);
+
+        // Strip a trailing carriage return (Windows CRLF clipboard text)
+        // so it doesn't end up inside the line buffer.
+        while (length > 0 && start[length - 1] == '\r')
+            length--;
 
         int extra = (i == 0 ? beforeLength : 0) +
                     (i == newLines - 1 ? afterLength : 0);
@@ -523,7 +532,7 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
         cursorColumn = lines[cursorLine].length;
     }
 
-    if (IsKeyPressed(KEY_UP) && cursorLine > 0) {
+    if (keyRepeat(KEY_UP) && !IsKeyDown(KEY_LEFT_CONTROL) && !IsKeyDown(KEY_RIGHT_CONTROL) && cursorLine > 0) {
         cursorLine--;
 
         if (cursorColumn > lines[cursorLine].length)
@@ -533,7 +542,7 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
             scrollKeyboard(cursorLine, lineHeight, ScreenRect.height, &scrollLine);
     }
 
-    if (IsKeyPressed(KEY_DOWN) && cursorLine < lineCount - 1) {
+    if (keyRepeat(KEY_DOWN) && !IsKeyDown(KEY_LEFT_CONTROL) && !IsKeyDown(KEY_RIGHT_CONTROL) && cursorLine < lineCount - 1) {
         cursorLine++;
 
         if (cursorColumn > lines[cursorLine].length)

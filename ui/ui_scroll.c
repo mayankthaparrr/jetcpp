@@ -133,7 +133,7 @@ float scrollbarHorizontal(float posx,float posy,float width,float contentWidth,f
     if (maxScroll > 0)
         thumbX += (*scrollX / maxScroll) * (width - thumbWidth);
 
-    Rectangle Column = {posx*0.5,posy+10,width,10};
+    Rectangle Column = {posx,posy+10,width,10};
     Rectangle Thumb = {thumbX,posy+10,thumbWidth,10};
 
 
