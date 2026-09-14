@@ -515,6 +515,7 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
     if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) && IsKeyPressed(KEY_UP)) {
         cursorLine = 0;
         cursorColumn = 0;
+
     }
 
     if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) && IsKeyPressed(KEY_DOWN)) {
@@ -527,6 +528,9 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
 
         if (cursorColumn > lines[cursorLine].length)
             cursorColumn = lines[cursorLine].length;
+
+
+            scrollKeyboard(cursorLine, lineHeight, ScreenRect.height, &scrollLine);
     }
 
     if (IsKeyPressed(KEY_DOWN) && cursorLine < lineCount - 1) {
@@ -534,14 +538,22 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
 
         if (cursorColumn > lines[cursorLine].length)
             cursorColumn = lines[cursorLine].length;
+
+        scrollKeyboard(cursorLine, lineHeight, ScreenRect.height-40, &scrollLine);
     }
 
-    if (IsKeyPressed(KEY_HOME))
+    if (IsKeyPressed(KEY_HOME)) {
         cursorColumn = 0;
+        cursorLine = 0;
+        scrollKeyboard(cursorLine, lineHeight, ScreenRect.height-40, &scrollLine);
+    }
 
-    if (IsKeyPressed(KEY_END))
+
+
+    if (IsKeyPressed(KEY_END)) {
         cursorColumn = lines[cursorLine].length;
-
+        scrollKeyboard(cursorLine, lineHeight, ScreenRect.height-40, &scrollLine);
+    }
     if (selecting && IsKeyPressed(KEY_BACKSPACE)) {
         deleteSelection();
         return;
@@ -702,7 +714,7 @@ void textstuff(Font usedfont, float fontsize) {
         keypressed = GetCharPressed();
     }
     // Hello World
-    if (IsKeyPressed(KEY_ENTER)) {
+    if (IsKeyPressed(KEY_ENTER)||IsKeyPressed(KEY_KP_ENTER)) {
         int remainingLength = lines[cursorLine].length - cursorColumn;
         addLine(cursorLine + 1);
         if (remainingLength + 1 > lines[cursorLine + 1].capacity) {
