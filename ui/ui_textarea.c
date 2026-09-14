@@ -696,7 +696,8 @@ void textstuff(Font usedfont, float fontsize) {
 
     navigation();
 
-    scrollMouse(lineCount, &scrollLine);
+    scrollMouse(lineCount, ScreenRect.height, lineHeight, &scrollLine,
+                ScreenRect.width - 5, contentWidth, &scrollX);
     drawSelection(usedfont, fontsize);
     for (int i = 0; i < lineCount; i++) {
         DrawTextEx(usedfont,lines[i].buffer,(Vector2){startX-scrollX,startY + (i - scrollLine) * lineHeight},fontsize,0.8,WHITE);

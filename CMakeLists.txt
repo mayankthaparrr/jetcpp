@@ -24,6 +24,8 @@ FetchContent_MakeAvailable(nfde)
 
 add_executable(JetCpp
         main.c
+        app_spawn.c
+        app_spawn.h
         ui/ui_ribbon.c
         ui/ui_ribbon.h
         ui/ui_textarea.c
@@ -37,6 +39,8 @@ add_executable(JetCpp
 set_target_properties(JetCpp PROPERTIES
         OUTPUT_NAME "Jet C++"
 )
+
+target_include_directories(JetCpp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(JetCpp PRIVATE
         raylib

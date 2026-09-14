@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "ui_ribbonEvents.h"
+#include "app_spawn.h"
 #include <string.h>
 #include "raylib.h"
 
@@ -274,7 +275,12 @@ void handleRibbonEvents(Rectangle rect,char *option) {
         if (CheckCollisionPointRec(GetMousePosition(),rect)) {
 
             if (strcmp(option,"New") == 0) {
-                newfile();
+                // "New" opens a new window: a separate process with a fresh
+                // document. Fall back to clearing this document if the
+                // process couldn't be spawned.
+                if (!spawnNewInstance()) {
+                    newfile();
+                }
             }
 
             if (strcmp(option,"Open") == 0) {

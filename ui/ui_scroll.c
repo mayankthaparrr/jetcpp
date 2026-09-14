@@ -22,16 +22,57 @@ void scrollKeyboard(int cursorLine, float lineHeight, float screenHeight, int *s
 
 
 
-void scrollMouse(int lineCount, int *scrollLine) {
-    float wheel = GetMouseWheelMove();
-    if (wheel != 0) {
-        *scrollLine -= (int)(wheel * 3);
-        if (*scrollLine > lineCount - 1)
-            *scrollLine = lineCount - 1;
 
-        if (*scrollLine < 0)
-            *scrollLine = 0;
+static float wheelAccumulator = 0.0f;
+static float hWheelAccumulator = 0.0f;
+
+void scrollMouse(int lineCount, float viewHeight, float lineHeight, int *scrollLine,
+                 float viewWidth, float contentWidth, float *scrollX) {
+    float wheel = GetMouseWheelMove();
+    if (wheel == 0.0f) {
+        return;
     }
+
+    // Ctrl+wheel scrolls horizontally (in pixels), matching the vertical
+    // sign convention: wheel up shows earlier content (scrolls left).
+    if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {
+        hWheelAccumulator += wheel * lineHeight * 3.0f;
+
+        int move = (int)hWheelAccumulator; // truncates toward zero
+        hWheelAccumulator -= move;
+
+        *scrollX -= move;
+
+        float maxScroll = contentWidth - viewWidth;
+        if (maxScroll < 0) maxScroll = 0;
+
+        if (*scrollX > maxScroll)
+            *scrollX = maxScroll;
+
+        if (*scrollX < 0)
+            *scrollX = 0;
+        return;
+    }
+
+    int visibleLines = (int)(viewHeight / lineHeight);
+    if (visibleLines < 1) visibleLines = 1;
+
+    // Stop when the last line reaches the bottom of the view — no blank
+    // space below the end of the document.
+    int maxScroll = lineCount - visibleLines;
+    if (maxScroll < 0) maxScroll = 0;
+
+    wheelAccumulator += wheel * 3.0f; // 3 lines per wheel notch
+
+    int move = (int)wheelAccumulator; // truncates toward zero
+    wheelAccumulator -= move;
+
+    *scrollLine -= move;
+    if (*scrollLine > maxScroll)
+        *scrollLine = maxScroll;
+
+    if (*scrollLine < 0)
+        *scrollLine = 0;
 }
 
 void scrollHorizontal(float cursorWidth, float screenWidth, float *scrollX) {
@@ -57,7 +98,9 @@ float scrollbar(float posy,float height,int linecount,float lineheight,int *scro
         thumbHeight = height;
 
 
-    float maxScroll = linecount - (height / lineheight)+10;
+    // Same bound as scrollMouse(): stop when the last line reaches the
+    // bottom of the view, so the thumb and wheel agree.
+    float maxScroll = linecount - (height / lineheight);
     float thumbY = posy - 5;
     if (maxScroll > 0)
         thumbY += ((float)*scrollLine / maxScroll) * (height - thumbHeight);
