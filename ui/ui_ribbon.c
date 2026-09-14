@@ -1,5 +1,6 @@
 #include <stdio.h>
-
+#include "ui_ribbonEvents.h"
+#include <string.h>
 #include "raylib.h"
 
 void handleRibbonHover();
@@ -267,16 +268,30 @@ void drawRibbon(Color color, Font usedfont, float fontsize) {
     Rectangle bottomRibbon = {0,GetScreenHeight()-(fontsize),GetScreenWidth(),fontsize};
     DrawRectangleRec(bottomRibbon,color);
 }
-
 void handleRibbonEvents(Rectangle rect,char *option) {
 
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         if (CheckCollisionPointRec(GetMousePosition(),rect)) {
-            if (option=="Open") {
-                printf("fileopen");
-                //                fileopen();
+
+            if (strcmp(option,"New") == 0) {
+                newfile();
+            }
+
+            if (strcmp(option,"Open") == 0) {
+                openfile();
+            }
+
+            if (strcmp(option,"Save") == 0) {
+                savefile();
+            }
+
+            if (strcmp(option,"Save As") == 0) {
+                saveas();
+            }
+
+            if (strcmp(option,"Save All") == 0) {
+                saveall();
             }
         }
     }
-
 }

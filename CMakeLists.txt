@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 4.3)
 
-project(ATR C)
+project("Jet C++" C)
 
 set(CMAKE_C_STANDARD 11)
 
@@ -14,7 +14,15 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(raylib)
 
-add_executable(ATR
+FetchContent_Declare(
+        nfde
+        GIT_REPOSITORY https://github.com/btzy/nativefiledialog-extended.git
+        GIT_TAG master
+)
+
+FetchContent_MakeAvailable(nfde)
+
+add_executable(JetCpp
         main.c
         ui/ui_ribbon.c
         ui/ui_ribbon.h
@@ -26,4 +34,11 @@ add_executable(ATR
         ui/ui_scroll.h
 )
 
-target_link_libraries(ATR PRIVATE raylib)
+set_target_properties(JetCpp PROPERTIES
+        OUTPUT_NAME "Jet C++"
+)
+
+target_link_libraries(JetCpp PRIVATE
+        raylib
+        nfd
+)

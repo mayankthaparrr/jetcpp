@@ -8,7 +8,7 @@
 #include "ui/ui_ribbon.h"
 #include "ui/ui_textarea.h"
 
-void addLine(void);
+void addLine(int);
 
 void drawRibbon(Color,Font,float);
 void borders(float,char *,Font);
@@ -32,11 +32,11 @@ int main() {
     SetExitKey(KEY_NULL);
 
 
-    addLine();
+    addLine(0);
     Roboto=LoadFont("C:/DEV/ATR/Roboto-Regular.ttf");
     IBM=LoadFont("C:/DEV/ATR/Px437_IBM_VGA_9x16.ttf");
 
-    Font usedfont=Roboto;
+    Font usedfont=IBM;
     SetTextureFilter(usedfont.texture, TEXTURE_FILTER_BILINEAR);
     Color tooblue = GetColor(0x0000aaff);
     Color greyy = GetColor(0xada8acff);

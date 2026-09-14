@@ -4,5 +4,9 @@
 
 #ifndef ATR_UI_RIBBONEVENTS_H
 #define ATR_UI_RIBBONEVENTS_H
-
+void newfile(void);
+void openfile(void);
+void savefile(void);
+void saveas(void);
+void saveall(void);
 #endif //ATR_UI_RIBBONEVENTS_H
