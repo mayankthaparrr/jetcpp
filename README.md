@@ -60,6 +60,13 @@ ui/ui_scroll.c/.h      — scrollbars, wheel handling, zoom
 5. **Project**: multi-file support
 6. **Debugger**: LLDB integration
 
+## Credits
+
+- [raylib 5.5](https://www.raylib.com/) — zlib license
+- [nativefiledialog-extended](https://github.com/btzy/nativefiledialog-extended) — MIT license (master branch, new API)
+- [Px437 IBM VGA 9x16 font](https://int10h.org/oldschool-pc-fonts/) — public domain / CC0
+- [Roboto font](https://fonts.google.com/specimen/Roboto) — Apache License 2.0
+
 ## License
 
 MIT
