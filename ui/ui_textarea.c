@@ -141,10 +141,99 @@ void selection(void) {
     }
 
     if (!IsKeyDown(KEY_LEFT_SHIFT) && !IsKeyDown(KEY_RIGHT_SHIFT) &&
+        !IsMouseButtonDown(MOUSE_BUTTON_LEFT) &&
         selectionLine == cursorLine && selectionColumn == cursorColumn) {
         selecting = 0;
     }
 }
+void posFromMouse(Font usedfont, float fontsize, Vector2 mouse, int *line, int *col) {
+    *line = scrollLine + (int)((mouse.y - startY) / lineHeight);
+
+    if (*line < 0) {
+        *line = 0;
+        *col = 0;
+        return;
+    }
+
+    if (*line >= lineCount) {
+        *line = lineCount - 1;
+        *col = lines[*line].length;
+        return;
+    }
+
+    float x = mouse.x - startX + scrollX;
+    int c = 0;
+
+    while (c < lines[*line].length) {
+        char save = lines[*line].buffer[c + 1];
+        lines[*line].buffer[c + 1] = '\0';
+        float w = MeasureTextEx(usedfont, lines[*line].buffer, fontsize, 0.8).x;
+        lines[*line].buffer[c + 1] = save;
+
+        if (w > x)
+            break;
+
+        c++;
+    }
+
+    *col = c;
+}
+
+void mouseSelection(Font usedfont, float fontsize) {
+    static int dragging = 0;
+    static int dragMoved = 0;
+
+    Vector2 mouse = GetMousePosition();
+
+    if (mouse.x < ScreenRect.x || mouse.x > ScreenRect.x + ScreenRect.width ||
+        mouse.y < ScreenRect.y || mouse.y > ScreenRect.y + ScreenRect.height)
+        return;
+
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        int line;
+        int column;
+
+        posFromMouse(usedfont, fontsize, mouse, &line, &column);
+
+        if (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) {
+            if (!selecting) {
+                selectionLine = cursorLine;
+                selectionColumn = cursorColumn;
+            }
+            selecting = 1;
+        }
+        else {
+            selectionLine = line;
+            selectionColumn = column;
+            dragMoved = 0;
+            selecting = 1;
+        }
+
+        cursorLine = line;
+        cursorColumn = column;
+        dragging = 1;
+    }
+    else if (dragging && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+        int line;
+        int column;
+
+        posFromMouse(usedfont, fontsize, mouse, &line, &column);
+
+        if (line != cursorLine || column != cursorColumn) {
+            cursorLine = line;
+            cursorColumn = column;
+            dragMoved = 1;
+        }
+    }
+    else if (dragging && IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+        dragging = 0;
+
+        // a plain click (no drag) collapses the selection
+        if (!dragMoved && selectionLine == cursorLine && selectionColumn == cursorColumn)
+            selecting = 0;
+    }
+}
+
 void drawSelection(Font usedfont, float fontsize) {
     if (!selecting)
         return;
@@ -719,6 +808,9 @@ void textstuff(Font usedfont, float fontsize) {
 
     scrollMouse(lineCount, ScreenRect.height, lineHeight, &scrollLine,
                 ScreenRect.width - 5, contentWidth, &scrollX);
+
+    mouseSelection(usedfont, fontsize);
+
     drawSelection(usedfont, fontsize);
     for (int i = 0; i < lineCount; i++) {
         DrawTextEx(usedfont,lines[i].buffer,(Vector2){startX-scrollX,startY + (i - scrollLine) * lineHeight},fontsize,0.8,WHITE);
