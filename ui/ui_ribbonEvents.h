@@ -9,6 +9,7 @@ extern int quitRequested; // set by File -> Quit; checked in the main loop
 void newfile(void);
 void selectall(void);
 void openfile(void);
+void loadFileAtPath(const char *path);
 void savefile(void);
 void saveas(void);
 #endif //ATR_UI_RIBBONEVENTS_H

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "ui_ribbonEvents.h"
-#include "app_spawn.h"
+#include "app_spawn/app_spawn.h"
+#include <stdlib.h>
 #include <string.h>
 #include "raylib.h"
 
@@ -248,6 +249,15 @@ void handleRibbonEvents(Rectangle rect,char *option) {
 
             if (strcmp(option,"Select All") == 0) {
                 selectall();
+            }
+
+            if (strcmp(option,"About") == 0) {
+                // Pop the project README open in a new editor window.
+                // Falls back to showing it in this window if spawn fails.
+                activeMenu = -1;
+                if (!spawnNewInstanceWithFile("C:/DEV/ATR/README.md")) {
+                    loadFileAtPath("C:/DEV/ATR/README.md");
+                }
             }
         }
     }

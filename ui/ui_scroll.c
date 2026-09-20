@@ -67,8 +67,8 @@ void scrollMouse(int lineCount, float viewHeight, float lineHeight, int *scrollL
     if (visibleLines < 1) visibleLines = 1;
 
     // Stop when the last line reaches the bottom of the view — no blank
-    // space below the end of the document.
-    int maxScroll = lineCount - visibleLines;
+    // space below the end of the document (plus a 30px scroll-down pad).
+    int maxScroll = lineCount - visibleLines + (int)(30.0f / lineHeight);
     if (maxScroll < 0) maxScroll = 0;
 
     wheelAccumulator += wheel * 3.0f; // 3 lines per wheel notch
@@ -108,8 +108,9 @@ float scrollbar(float posy,float height,int linecount,float lineheight,int *scro
 
 
     // Same bound as scrollMouse(): stop when the last line reaches the
-    // bottom of the view, so the thumb and wheel agree.
-    float maxScroll = linecount - (height / lineheight);
+    // bottom of the view (plus the 30px scroll-down pad), so the thumb
+    // and wheel agree.
+    float maxScroll = linecount - (height / lineheight) + 30.0f / lineheight;
     float thumbY = posy - 5;
     if (maxScroll > 0)
         thumbY += ((float)*scrollLine / maxScroll) * (height - thumbHeight);

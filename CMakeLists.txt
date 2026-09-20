@@ -24,8 +24,8 @@ FetchContent_MakeAvailable(nfde)
 
 add_executable(JetCpp
         main.c
-        app_spawn.c
-        app_spawn.h
+        app_spawn/app_spawn.c
+        app_spawn/app_spawn.h
         ui/ui_ribbon.c
         ui/ui_ribbon.h
         ui/ui_textarea.c
@@ -46,3 +46,8 @@ target_link_libraries(JetCpp PRIVATE
         raylib
         nfd
 )
+
+# Editor fonts ship next to the executable; main.c resolves them relative
+# to the exe via GetApplicationDirectory() (fixes hardcoded C:/DEV/ATR paths).
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/Px437_IBM_VGA_9x16.ttf"
+     DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")

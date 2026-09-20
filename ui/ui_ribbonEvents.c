@@ -104,17 +104,11 @@ void selectall() {
     selecting = 1;
 }
 
-void openfile() {
-    nfdchar_t *outPath = NULL;
-    if (NFD_OpenDialog(&outPath, NULL, 0, NULL) != NFD_OKAY) {
-        return; // cancelled or failed
-    }
-
-    FILE *f = fopen(outPath, "rb");
-    if (!f) {
-        NFD_FreePath(outPath);
-        return;
-    }
+// Load `path` into the editor buffer. Used by File -> Open and by
+// main() when the program is launched with a file argument.
+void loadFileAtPath(const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return;
     fseek(f, 0, SEEK_END);
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
@@ -122,7 +116,6 @@ void openfile() {
     char *content = malloc(size + 1);
     if (!content) {
         fclose(f);
-        NFD_FreePath(outPath);
         return;
     }
     size_t bytesRead = fread(content, 1, size, f);
@@ -149,8 +142,17 @@ void openfile() {
     free(content);
 
     // Remember where the file lives so Save can write back to it.
-    setFilepath(outPath);
-    setFilename(baseNameOf(outPath));
+    setFilepath(path);
+    setFilename(baseNameOf(path));
+}
+
+void openfile() {
+    nfdchar_t *outPath = NULL;
+    if (NFD_OpenDialog(&outPath, NULL, 0, NULL) != NFD_OKAY) {
+        return; // cancelled or failed
+    }
+
+    loadFileAtPath(outPath);
 
     NFD_FreePath(outPath);
 }

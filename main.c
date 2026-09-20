@@ -14,13 +14,12 @@ void addLine(int);
 
 void drawRibbon(Color,Font,float);
 void borders(float,char *,Font);
-Font Roboto;
 float fontsize;
 float basefont; // unzoomed size used for the ribbon; fontsize = basefont * zoom
 Font IBM;
 
 
-int main() {
+int main(int argc, char **argv) {
 #ifdef _WIN32
     //SetConfigFlags(FLAG_WINDOW_UNDECORATED);
 #endif
@@ -36,8 +35,16 @@ int main() {
 
 
     addLine(0);
-    Roboto=LoadFont("C:/DEV/ATR/Roboto-Regular.ttf");
-    IBM=LoadFont("C:/DEV/ATR/Px437_IBM_VGA_9x16.ttf");
+    // Font ships next to the executable (copied by CMake); resolve relative
+    // to the exe dir so the app runs from any folder or machine.
+    IBM = LoadFont(TextFormat("%sPx437_IBM_VGA_9x16.ttf", GetApplicationDirectory()));
+    if (IBM.texture.id == 0) IBM = GetFontDefault(); // missing font must never break drawing
+
+    // Launched with a file argument (e.g. Help -> About opening the README
+    // in a new window): load it instead of starting with an empty buffer.
+    if (argc > 1 && argv[1] && argv[1][0] != '\0') {
+        loadFileAtPath(argv[1]);
+    }
 
     Font usedfont=IBM;
     SetTextureFilter(usedfont.texture, TEXTURE_FILTER_BILINEAR);
