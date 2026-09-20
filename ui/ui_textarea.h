@@ -4,7 +4,7 @@
 void borders(float,char *,Font);
 void textstuff(Font,float);
 
-void addLine(int position);
+int addLine(int position);
 typedef struct {
     char *buffer;
     int length;

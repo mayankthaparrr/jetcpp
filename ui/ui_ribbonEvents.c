@@ -133,7 +133,9 @@ void loadFileAtPath(const char *path) {
             while (len > 0 && start[len - 1] == '\r') len--;
             // a trailing newline should not create an extra empty last line
             if (content[i] == '\0' && len == 0 && line > 0) break;
-            if (line > 0) addLine(lineCount);
+            // OOM mid-load: keep what loaded so far rather than corrupt
+            // the buffer by writing past the array.
+            if (line > 0 && !addLine(lineCount)) break;
             setLineText(line, start, len);
             line++;
             start = &content[i + 1];

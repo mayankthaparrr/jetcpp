@@ -23,6 +23,13 @@ Vector2 textpos;
 float cursorX, cursorY;
 Font usedfont;
 
+// Render-clip state (refreshed every frame in textstuff()):
+// charW = monospace advance per column, used instead of MeasureTextEx everywhere.
+// cachedContentWidth feeds the horizontal scrollbar; only rescanned on edits.
+static float charW = 10.0f;
+static float cachedContentWidth = 0;
+static int contentWidthDirty = 1;
+
 typedef struct {
     char *buffer;
     int length;
@@ -43,6 +50,51 @@ int selecting = 0;
 float zoom = 1.0f; // font size multiplier (Ctrl+wheel / Ctrl+'+')
 float ribbon_height=5;
 Rectangle ScreenRect;
+
+// ---------------------------------------------------------------------------
+// OOM discipline (K5 fix): realloc failure must degrade to "edit refused",
+// never leak the old block or deref NULL. All growth goes through these.
+static int oomDrillCountdown = 0;   // OOM drill: fails the Nth grow when armed
+static double oomFlashUntil = 0;    // "OUT OF MEMORY" ribbon flash deadline
+
+static void oomRefuse(void) {
+    oomFlashUntil = GetTime() + 2.0;
+}
+
+// Grow one line's text buffer. Returns 1 on success; on failure the line is
+// left untouched (old buffer valid) and the caller must abort the edit.
+static int growLine(Line *line, int newCapacity) {
+    if (newCapacity <= line->capacity)
+        return 1; // already fits
+    if (oomDrillCountdown > 0 && --oomDrillCountdown == 0) {
+        oomRefuse();
+        return 0;
+    }
+    char *grown = realloc(line->buffer, newCapacity);
+    if (!grown) {
+        oomRefuse();
+        return 0;
+    }
+    line->buffer = grown;
+    line->capacity = newCapacity;
+    return 1;
+}
+
+// Grow the global lines[] array. Same contract as growLine.
+static int growLines(int newCount) {
+    if (oomDrillCountdown > 0 && --oomDrillCountdown == 0) {
+        oomRefuse();
+        return 0;
+    }
+    Line *grown = realloc(lines, newCount * sizeof(Line));
+    if (!grown) {
+        oomRefuse();
+        return 0;
+    }
+    lines = grown;
+    return 1;
+}
+// ---------------------------------------------------------------------------
 
 //dont ask me bout any of this code. please. i dont know what im doing half the time. thanks.
 float vertscroll=0;
@@ -77,17 +129,26 @@ double repeatStartTime = 0;
 double repeatNextTime = 0;
 int repeatKey = 0;
 
-void addLine(int position) {
-    lines = realloc(lines, (lineCount + 1) * sizeof(Line));
+int addLine(int position) {
+    if (!growLines(lineCount + 1)) {
+        return 0; // OOM: line array unchanged, caller aborts
+    }
 
     memmove(&lines[position + 1], &lines[position], (lineCount - position) * sizeof(Line));
 
     lines[position].capacity = 16;
     lines[position].length = 0;
     lines[position].buffer = malloc(lines[position].capacity);
+    if (!lines[position].buffer) {
+        // Garbage slot at [lineCount] is beyond lineCount (never rendered,
+        // overwritten by the next addLine) — safe to refuse.
+        oomRefuse();
+        return 0;
+    }
     lines[position].buffer[0] = '\0';
 
     lineCount++;
+    return 1;
 }
 
 int isWordChar(char c) {
@@ -98,10 +159,10 @@ int isWordChar(char c) {
 }
 
 void cursor(Font usedfont, float fontsize, float startX, float startY, float lineHeight) {
-    char beforeCursor[lines[cursorLine].capacity];
-    memcpy(beforeCursor, lines[cursorLine].buffer, cursorColumn);
-    beforeCursor[cursorColumn] = '\0';
-    float cursorX = startX -scrollX+ MeasureTextEx(usedfont, beforeCursor, fontsize, 0.8).x;
+    int relLine = cursorLine - scrollLine;
+    if (relLine < 0 || relLine > (int)(ScreenRect.height / lineHeight) + 2)
+        return; // offscreen: skip work, scissor would hide it anyway
+    float cursorX = startX -scrollX + cursorColumn * charW;
     float cursorY = startY + (cursorLine - scrollLine) * lineHeight;
     DrawTextEx(usedfont, "|", (Vector2){cursorX, cursorY}, fontsize , 0, RED);
 }
@@ -253,7 +314,16 @@ void drawSelection(Font usedfont, float fontsize) {
         endColumn = tempColumn;
     }
 
-    for (int i = startLine; i <= endLine; i++) {
+    // Intersect the selection with the visible range: offscreen lines draw
+    // nothing instead of paying VLA + MeasureTextEx cost.
+    int first = scrollLine;
+    if (first < 0) first = 0;
+    int last = scrollLine + (int)(ScreenRect.height / lineHeight) + 2;
+    if (last > lineCount) last = lineCount;
+    int from = startLine > first ? startLine : first;
+    int to = endLine < last ? endLine : last;
+
+    for (int i = from; i <= to; i++) {
         int lineStart;
         int lineEnd;
 
@@ -267,17 +337,9 @@ void drawSelection(Font usedfont, float fontsize) {
         else
             lineEnd = lines[i].length;
 
-        char beforeStart[lineStart + 1];
-        char selected[lineEnd - lineStart + 1];
-
-        memcpy(beforeStart, lines[i].buffer, lineStart);
-        beforeStart[lineStart] = '\0';
-
-        memcpy(selected, &lines[i].buffer[lineStart], lineEnd - lineStart);
-        selected[lineEnd - lineStart] = '\0';
-
-        float x = startX -scrollX + MeasureTextEx(usedfont, beforeStart, fontsize, 0.8).x;
-        float width = MeasureTextEx(usedfont, selected, fontsize, 0.8).x;
+        // Monospace: column * advance, no measuring, no VLAs.
+        float x = startX -scrollX + lineStart * charW;
+        float width = (lineEnd - lineStart) * charW;
 
         DrawRectangle(x, startY + (i - scrollLine) * lineHeight, width, lineHeight, BLUE); //selection color here
     }
@@ -308,20 +370,23 @@ void deleteSelection(void) {
                 lines[startLine].length - endColumn + 1);
 
         lines[startLine].length -= endColumn - startColumn;
+        contentWidthDirty = 1;
     }
 
     else {
         int firstLength = startColumn;
         int lastLength = lines[endLine].length - endColumn;
 
-        lines[startLine].capacity = firstLength + lastLength + 1;
-        lines[startLine].buffer = realloc(lines[startLine].buffer, lines[startLine].capacity);
+        if (!growLine(&lines[startLine], firstLength + lastLength + 1)) {
+            return; // OOM: refuse the delete, selection stays intact
+        }
 
         memcpy(&lines[startLine].buffer[firstLength],
                &lines[endLine].buffer[endColumn],
                lastLength + 1);
 
         lines[startLine].length = firstLength + lastLength;
+        contentWidthDirty = 1;
 
         for (int i = startLine + 1; i <= endLine; i++) {
             free(lines[i].buffer);
@@ -415,9 +480,9 @@ void pasteClipboard(void) {
     if (strchr(clipboard, '\n') == NULL) {
         Line *line = &lines[cursorLine];
 
-        if (line->length + pasteLength + 1 > line->capacity) {
-            line->capacity = line->length + pasteLength + 1;
-            line->buffer = realloc(line->buffer, line->capacity);
+        if (line->length + pasteLength + 1 > line->capacity &&
+            !growLine(line, line->length + pasteLength + 1)) {
+            return; // OOM: paste refused, buffer untouched
         }
 
         memmove(&line->buffer[cursorColumn + pasteLength],
@@ -427,6 +492,7 @@ void pasteClipboard(void) {
         memcpy(&line->buffer[cursorColumn], clipboard, pasteLength);
 
         line->length += pasteLength;
+        contentWidthDirty = 1;
         cursorColumn += pasteLength;
         return;
     }
@@ -452,7 +518,11 @@ void pasteClipboard(void) {
 
     int oldLineCount = lineCount;
 
-    lines = realloc(lines, (lineCount + newLines - 1) * sizeof(Line));
+    if (!growLines(lineCount + newLines - 1)) {
+        free(before); // OOM: refuse the multi-line paste entirely
+        free(after);
+        return;
+    }
 
     memmove(&lines[cursorLine + newLines],
             &lines[cursorLine + 1],
@@ -512,6 +582,7 @@ void pasteClipboard(void) {
     free(before);
     free(after);
 
+    contentWidthDirty = 1;
     cursorLine += newLines - 1;
     cursorColumn = lines[cursorLine].length - afterLength;
 }
@@ -693,16 +764,18 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
 
         memmove(&lines[cursorLine].buffer[cursorColumn],&lines[cursorLine].buffer[oldColumn],lines[cursorLine].length - oldColumn + 1);
         lines[cursorLine].length -= oldColumn - cursorColumn;
+        contentWidthDirty = 1;
         if (cursorColumn == 0 && cursorLine > 0) {
             int previousLength = lines[cursorLine - 1].length;
             int currentLength = lines[cursorLine].length;
 
-            //lines[cursorLine - 1].buffer = realloc(lines[cursorLine - 1].buffer,previousLength + currentLength + 1);
-            lines[cursorLine - 1].capacity = previousLength + currentLength + 1;
-            lines[cursorLine - 1].buffer = realloc(lines[cursorLine - 1].buffer,lines[cursorLine - 1].capacity);
+            if (!growLine(&lines[cursorLine - 1], previousLength + currentLength + 1)) {
+                return; // OOM: word delete above still stands, merge refused
+            }
             memcpy(&lines[cursorLine - 1].buffer[previousLength],lines[cursorLine].buffer,currentLength + 1);
 
             lines[cursorLine - 1].length += currentLength;
+            contentWidthDirty = 1;
 
             free(lines[cursorLine].buffer);
 
@@ -721,18 +794,21 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
 
             cursorColumn--;
             lines[cursorLine].length--;
+            contentWidthDirty = 1;
         }
 
         else if (cursorColumn == 0 && cursorLine > 0) {
             int previousLength = lines[cursorLine - 1].length;
             int currentLength = lines[cursorLine].length;
 
-            lines[cursorLine - 1].capacity = previousLength + currentLength + 1;
-            lines[cursorLine - 1].buffer = realloc(lines[cursorLine - 1].buffer,lines[cursorLine - 1].capacity);
+            if (!growLine(&lines[cursorLine - 1], previousLength + currentLength + 1)) {
+                return; // OOM: merge refused, nothing deleted this frame
+            }
 
             memcpy(&lines[cursorLine - 1].buffer[previousLength],lines[cursorLine].buffer,currentLength + 1);
 
             lines[cursorLine - 1].length += currentLength;
+            contentWidthDirty = 1;
             cursorLine--;
             cursorColumn = previousLength;
 
@@ -756,13 +832,16 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
 
         lines[cursorLine].length -= cursorColumn - oldColumn;
         cursorColumn = oldColumn;
+        contentWidthDirty = 1;
         if (cursorColumn == lines[cursorLine].length && cursorLine < lineCount - 1) {
             int currentLength = lines[cursorLine].length;
             int nextLength = lines[cursorLine + 1].length;
-            lines[cursorLine].capacity = currentLength + nextLength + 1;
-            lines[cursorLine].buffer = realloc(lines[cursorLine].buffer,lines[cursorLine].capacity);
+            if (!growLine(&lines[cursorLine], currentLength + nextLength + 1)) {
+                return; // OOM: merge refused
+            }
             memcpy(&lines[cursorLine].buffer[currentLength],lines[cursorLine + 1].buffer,nextLength + 1);
             lines[cursorLine].length += nextLength;
+            contentWidthDirty = 1;
             free(lines[cursorLine + 1].buffer);
             memmove(&lines[cursorLine + 1],&lines[cursorLine + 2],(lineCount - cursorLine - 2) * sizeof(Line));
             lineCount--;
@@ -773,14 +852,17 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
             memmove(&lines[cursorLine].buffer[cursorColumn],&lines[cursorLine].buffer[cursorColumn + 1],lines[cursorLine].length - cursorColumn);
 
             lines[cursorLine].length--;
+            contentWidthDirty = 1;
         }
         else if (cursorLine < lineCount - 1) {
             int currentLength = lines[cursorLine].length;
             int nextLength = lines[cursorLine + 1].length;
-            lines[cursorLine].capacity = currentLength + nextLength + 1;
-            lines[cursorLine].buffer = realloc(lines[cursorLine].buffer,lines[cursorLine].capacity);
+            if (!growLine(&lines[cursorLine], currentLength + nextLength + 1)) {
+                return; // OOM: merge refused
+            }
             memcpy(&lines[cursorLine].buffer[currentLength],lines[cursorLine + 1].buffer,nextLength + 1);
             lines[cursorLine].length += nextLength;
+            contentWidthDirty = 1;
             free(lines[cursorLine + 1].buffer);
             memmove(&lines[cursorLine + 1],&lines[cursorLine + 2],(lineCount - cursorLine - 2) * sizeof(Line));
             lineCount--;
@@ -791,15 +873,31 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
 void textstuff(Font usedfont, float fontsize) {
     selection();
 
-    float contentWidth = 0;
+    // Monospace advance per column. Spacing 0.8 adds per char, so measure a
+    // 10-char run and divide (single-glyph measure undercounts the advance).
+    charW = MeasureTextEx(usedfont, "MMMMMMMMMM", fontsize, 0.8).x / 10.0f;
 
-    for (int i = 0; i < lineCount; i++) {
-        float width = MeasureTextEx(usedfont,lines[i].buffer,fontsize,0.8).x;
+    // Visible line range: everything outside [first,last) is skipped, not
+    // merely scissored — the CPU no longer measures/draws offscreen lines.
+    int first = scrollLine;
+    if (first < 0) first = 0;
+    int last = scrollLine + (int)(ScreenRect.height / lineHeight) + 2;
+    if (last > lineCount) last = lineCount;
 
-        if (width > contentWidth)
-            contentWidth = width;
+    // contentWidth only rescans on edit frames or zoom changes (charW moves):
+    // strlen sweep, no glyph work.
+    static float lastCharW = 0;
+    if (contentWidthDirty || charW != lastCharW) {
+        cachedContentWidth = 0;
+        for (int i = 0; i < lineCount; i++) {
+            float width = strlen(lines[i].buffer) * charW;
+            if (width > cachedContentWidth)
+                cachedContentWidth = width;
+        }
+        contentWidthDirty = 0;
+        lastCharW = charW;
     }
-    horscroll=scrollbarHorizontal(startX,ScreenRect.y + ScreenRect.height,ScreenRect.width-5,contentWidth,&scrollX);
+    horscroll=scrollbarHorizontal(startX,ScreenRect.y + ScreenRect.height,ScreenRect.width-5,cachedContentWidth,&scrollX);
 
 
     BeginScissorMode(ScreenRect.x, ScreenRect.y+20, ScreenRect.width-3, ScreenRect.height-20);
@@ -807,12 +905,12 @@ void textstuff(Font usedfont, float fontsize) {
     navigation();
 
     scrollMouse(lineCount, ScreenRect.height, lineHeight, &scrollLine,
-                ScreenRect.width - 5, contentWidth, &scrollX);
+                ScreenRect.width - 5, cachedContentWidth, &scrollX);
 
     mouseSelection(usedfont, fontsize);
 
     drawSelection(usedfont, fontsize);
-    for (int i = 0; i < lineCount; i++) {
+    for (int i = first; i < last; i++) {
         DrawTextEx(usedfont,lines[i].buffer,(Vector2){startX-scrollX,startY + (i - scrollLine) * lineHeight},fontsize,0.8,WHITE);
 
     }
@@ -825,13 +923,15 @@ void textstuff(Font usedfont, float fontsize) {
         }
         Line *line = &lines[cursorLine];
 
-        if (line->length + 1 >= line->capacity) {
-            line->capacity *= 2;
-            line->buffer = realloc(line->buffer, line->capacity);
+        if (line->length + 1 >= line->capacity &&
+            !growLine(line, line->capacity * 2)) {
+            oomRefuse();
+            break; // OOM: character refused, buffer untouched
         }
         memmove(&line->buffer[cursorColumn + 1],&line->buffer[cursorColumn],line->length - cursorColumn + 1);
         line->buffer[cursorColumn] = (char)keypressed;
         line->length++;
+        contentWidthDirty = 1;
         cursorColumn++;
         line->buffer[line->length] = '\0';
         keypressed = GetCharPressed();
@@ -839,37 +939,37 @@ void textstuff(Font usedfont, float fontsize) {
     // Hello World
     if (IsKeyPressed(KEY_ENTER)||IsKeyPressed(KEY_KP_ENTER)) {
         int remainingLength = lines[cursorLine].length - cursorColumn;
-        addLine(cursorLine + 1);
-        if (remainingLength + 1 > lines[cursorLine + 1].capacity) {
-            lines[cursorLine + 1].capacity = remainingLength + 1;
-            lines[cursorLine + 1].buffer = realloc(lines[cursorLine + 1].buffer,lines[cursorLine + 1].capacity);
+        if (!addLine(cursorLine + 1)) {
+            oomRefuse(); // OOM: cannot split, Enter refused
+        } else {
+            if (!growLine(&lines[cursorLine + 1], remainingLength + 1)) {
+                // OOM: the new line stays empty; degrade to plain newline.
+                oomRefuse();
+            } else {
+                memmove(lines[cursorLine + 1].buffer,&lines[cursorLine].buffer[cursorColumn],remainingLength + 1);
+                lines[cursorLine + 1].length = remainingLength;
+                lines[cursorLine].buffer[cursorColumn] = '\0';
+                lines[cursorLine].length = cursorColumn;
+            }
+            contentWidthDirty = 1;
+            cursorLine++;
+            cursorColumn = 0;
         }
-
-        memmove(lines[cursorLine + 1].buffer,&lines[cursorLine].buffer[cursorColumn],remainingLength + 1);
-        lines[cursorLine + 1].length = remainingLength;
-        lines[cursorLine].buffer[cursorColumn] = '\0';
-        lines[cursorLine].length = cursorColumn;
-        cursorLine++;
-        cursorColumn = 0;
     }
     if (IsKeyPressed(KEY_TAB)) {
         Line *line = &lines[cursorLine];
-        if (line->length + 1 >= line->capacity) {
-            line->capacity *= 2;
-            line->buffer = realloc(line->buffer, line->capacity);
+        if ((line->length + 1 >= line->capacity && !growLine(line, line->capacity * 2))) {
+            oomRefuse(); // OOM: Tab refused, buffer untouched
+        } else {
+            memmove(&line->buffer[cursorColumn + 1],&line->buffer[cursorColumn],line->length - cursorColumn + 1);
+            line->buffer[cursorColumn] = '\t';
+            line->length++;
+            contentWidthDirty = 1;
+            cursorColumn++;
+            line->buffer[line->length] = '\0';
         }
-
-        memmove(&line->buffer[cursorColumn + 1],&line->buffer[cursorColumn],line->length - cursorColumn + 1);
-        line->buffer[cursorColumn] = '\t';
-        line->length++;
-        cursorColumn++;
-        line->buffer[line->length] = '\0';
     }
-    char beforeCursor[lines[cursorLine].capacity];
-    memcpy(beforeCursor, lines[cursorLine].buffer, cursorColumn);
-    beforeCursor[cursorColumn] = '\0';
-
-    float cursorWidth = MeasureTextEx(usedfont, beforeCursor, fontsize, 0.8).x;
+    float cursorWidth = cursorColumn * charW;
     if (GetKeyPressed() != 0) {
     scrollHorizontal(cursorWidth, ScreenRect.width, &scrollX);
         // some key was pressed
@@ -878,6 +978,19 @@ void textstuff(Font usedfont, float fontsize) {
     EndScissorMode();
     vertscroll=scrollbar(ScreenRect.y,ScreenRect.height,lineCount,lineHeight,&scrollLine);
     //terminal_height=make_terminal(ScreenRect.height);
+
+    // OOM feedback: flash above the bottom ribbon whenever an edit was refused.
+    if (oomFlashUntil > 0.0 && GetTime() < oomFlashUntil) {
+        DrawTextEx(usedfont, "OUT OF MEMORY - edit refused",
+                   (Vector2){10, GetScreenHeight() - fontsize * 1.05f - 24},
+                   fontsize * 0.8f, 0, RED);
+    }
+
+    // OOM drill (debug): Ctrl+Alt+O arms a countdown; the 5th grow attempt
+    // then fails as if out of memory. Verify the editor survives the drill.
+    if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyDown(KEY_LEFT_ALT) && IsKeyPressed(KEY_O)) {
+        oomDrillCountdown = 5;
+    }
 }
 
 

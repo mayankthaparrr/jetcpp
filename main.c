@@ -10,7 +10,7 @@
 #include "ui/ui_ribbonEvents.h"
 #include <nfd.h>
 
-void addLine(int);
+int addLine(int);
 
 void drawRibbon(Color,Font,float);
 void borders(float,char *,Font);
