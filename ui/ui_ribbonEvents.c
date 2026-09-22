@@ -3,6 +3,7 @@
 //
 #include "ui_ribbonEvents.h"
 #include "ui_textarea.h"
+#include "../func/undo.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -51,6 +52,7 @@ static const char *baseNameOf(const char *path) {
 
 // Clear the editor back to a single empty line with the cursor at the top.
 static void resetEditor(void) {
+    undo_reset(); // history refers to the old document; drop it
     for (int i = 0; i < lineCount; i++) {
         free(lines[i].buffer);
     }
@@ -108,7 +110,10 @@ void selectall() {
 // main() when the program is launched with a file argument.
 void loadFileAtPath(const char *path) {
     FILE *f = fopen(path, "rb");
-    if (!f) return;
+    if (!f) {
+        showStatusError("FAILED TO OPEN FILE");
+        return;
+    }
     fseek(f, 0, SEEK_END);
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
@@ -116,6 +121,7 @@ void loadFileAtPath(const char *path) {
     char *content = malloc(size + 1);
     if (!content) {
         fclose(f);
+        showStatusError("OUT OF MEMORY - could not load file");
         return;
     }
     size_t bytesRead = fread(content, 1, size, f);
@@ -135,7 +141,10 @@ void loadFileAtPath(const char *path) {
             if (content[i] == '\0' && len == 0 && line > 0) break;
             // OOM mid-load: keep what loaded so far rather than corrupt
             // the buffer by writing past the array.
-            if (line > 0 && !addLine(lineCount)) break;
+            if (line > 0 && !addLine(lineCount)) {
+                showStatusError("OUT OF MEMORY - file partially loaded");
+                break;
+            }
             setLineText(line, start, len);
             line++;
             start = &content[i + 1];
@@ -177,7 +186,11 @@ void savefile() {
         saveas(); // never saved/opened yet: ask for a location
         return;
     }
-    writeFile(filepath);
+    if (!writeFile(filepath)) {
+        // K8: a failed save must be visible AND keep the unsaved-changes
+        // guard armed (bufferDirty untouched) so quitting still prompts.
+        showStatusError("SAVE FAILED - disk full, locked, or no permission?");
+    }
 }
 
 void saveas() {
@@ -190,6 +203,8 @@ void saveas() {
     if (writeFile(target)) {
         setFilepath(target);
         setFilename(baseNameOf(target));
+    } else {
+        showStatusError("SAVE FAILED");
     }
     if (outPath) NFD_FreePath(outPath);
 }

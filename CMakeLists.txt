@@ -24,8 +24,10 @@ FetchContent_MakeAvailable(nfde)
 
 add_executable(JetCpp
         main.c
-        app_spawn/app_spawn.c
-        app_spawn/app_spawn.h
+        func/app_spawn.c
+        func/app_spawn.h
+        func/undo.c
+        func/undo.h
         ui/ui_ribbon.c
         ui/ui_ribbon.h
         ui/ui_textarea.c

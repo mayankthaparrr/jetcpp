@@ -5,6 +5,7 @@ void borders(float,char *,Font);
 void textstuff(Font,float);
 
 int addLine(int position);
+void showStatusError(const char *msg); // red flash above the bottom ribbon
 typedef struct {
     char *buffer;
     int length;
@@ -22,5 +23,8 @@ extern int scrollLine;
 extern int scrollColumn;
 extern float scrollX;
 extern float zoom;
+extern float lineHeight;
+extern Rectangle ScreenRect;
+extern int contentWidthDirty;
 
 #endif

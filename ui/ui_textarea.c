@@ -8,6 +8,7 @@
 #include <string.h>
 #include "raylib.h"
 #include "ui_scroll.h"
+#include "../func/undo.h"
 
 //inits vars
 int scrollLine = 0;
@@ -28,7 +29,7 @@ Font usedfont;
 // cachedContentWidth feeds the horizontal scrollbar; only rescanned on edits.
 static float charW = 10.0f;
 static float cachedContentWidth = 0;
-static int contentWidthDirty = 1;
+int contentWidthDirty = 1;
 
 typedef struct {
     char *buffer;
@@ -55,10 +56,19 @@ Rectangle ScreenRect;
 // OOM discipline (K5 fix): realloc failure must degrade to "edit refused",
 // never leak the old block or deref NULL. All growth goes through these.
 static int oomDrillCountdown = 0;   // OOM drill: fails the Nth grow when armed
-static double oomFlashUntil = 0;    // "OUT OF MEMORY" ribbon flash deadline
+
+// Shared error-status flash (drawn above the bottom ribbon by textstuff()).
+// One mechanism for every refused/failed operation: OOM, save failure, ...
+static char statusMsg[80] = "";
+static double statusUntil = 0;
+
+void showStatusError(const char *msg) {
+    snprintf(statusMsg, sizeof statusMsg, "%s", msg);
+    statusUntil = GetTime() + 2.0;
+}
 
 static void oomRefuse(void) {
-    oomFlashUntil = GetTime() + 2.0;
+    showStatusError("OUT OF MEMORY - edit refused");
 }
 
 // Grow one line's text buffer. Returns 1 on success; on failure the line is
@@ -437,6 +447,10 @@ void copySelection(void) {
     }
 
     char *copy = malloc(totalLength + 1);
+    if (!copy) {
+        showStatusError("OUT OF MEMORY - copy failed");
+        return;
+    }
     int position = 0;
 
     for (int i = startLine; i <= endLine; i++) {
@@ -502,6 +516,13 @@ void pasteClipboard(void) {
 
     char *before = malloc(beforeLength + 1);
     char *after = malloc(afterLength + 1);
+
+    if (!before || !after) {
+        free(before);
+        free(after);
+        showStatusError("OUT OF MEMORY - paste refused");
+        return;
+    }
 
     memcpy(before, lines[cursorLine].buffer, beforeLength);
     before[beforeLength] = '\0';
@@ -589,6 +610,26 @@ void pasteClipboard(void) {
 
 void navigation(void) {
 
+    // Any caret move finalizes a coalescing run (VsCode closes runs on move).
+    if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_UP) ||
+        IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_HOME) || IsKeyPressed(KEY_END))
+        undo_push(1);
+
+    // Undo / redo: Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z (mirrors office editors).
+    if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {
+        if (IsKeyPressed(KEY_Z) &&
+            !IsKeyDown(KEY_LEFT_SHIFT) && !IsKeyDown(KEY_RIGHT_SHIFT)) {
+            undo_undo();
+            return;
+        }
+        if (IsKeyPressed(KEY_Y) ||
+            (IsKeyPressed(KEY_Z) &&
+             (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)))) {
+            undo_redo();
+            return;
+        }
+    }
+
     // Ctrl+'+' (main-row '=' or keypad '+'): zoom in.
     if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
         (IsKeyPressed(KEY_EQUAL) || IsKeyPressed(KEY_KP_ADD))) {
@@ -625,12 +666,22 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
     if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
         IsKeyPressed(KEY_X) && selecting) {
         copySelection();
+        undo_run_selection();
         deleteSelection();
+        undo_push(1);
         return;
     }
     if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
         IsKeyPressed(KEY_V)) {
+        if (selecting) {
+            undo_run_selection(); // one step: paste swallows the selection
+            deleteSelection();
+        } else {
+            undo_discrete(cursorLine, 1);
+        }
+        int beforeLineCount = lineCount;
         pasteClipboard();
+        undo_push(lineCount - beforeLineCount + 1);
         return;
     }
     if (selecting && !IsKeyDown(KEY_LEFT_SHIFT) && !IsKeyDown(KEY_RIGHT_SHIFT)) {
@@ -745,16 +796,26 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
         scrollKeyboard(cursorLine, lineHeight, ScreenRect.height-40, &scrollLine);
     }
     if (selecting && IsKeyPressed(KEY_BACKSPACE)) {
+        undo_run_selection();
         deleteSelection();
+        undo_push(1);
         return;
     }
 
     if (selecting && IsKeyPressed(KEY_DELETE)) {
+        undo_run_selection();
         deleteSelection();
+        undo_push(1);
         return;
     }
 
     if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) && IsKeyPressed(KEY_BACKSPACE)) {
+        int tmpCol = cursorColumn;
+        while (tmpCol > 0 && !isWordChar(lines[cursorLine].buffer[tmpCol - 1])) tmpCol--;
+        while (tmpCol > 0 && isWordChar(lines[cursorLine].buffer[tmpCol - 1])) tmpCol--;
+        int mergeUp = (tmpCol == 0 && cursorLine > 0);
+        undo_discrete(mergeUp ? cursorLine - 1 : cursorLine, mergeUp ? 2 : 1);
+
         int oldColumn = cursorColumn;
         while (cursorColumn > 0 && !isWordChar(lines[cursorLine].buffer[cursorColumn - 1]))
             cursorColumn--;
@@ -770,7 +831,8 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
             int currentLength = lines[cursorLine].length;
 
             if (!growLine(&lines[cursorLine - 1], previousLength + currentLength + 1)) {
-                return; // OOM: word delete above still stands, merge refused
+                undo_push(2); // OOM: word delete above still stands, merge refused
+                return;
             }
             memcpy(&lines[cursorLine - 1].buffer[previousLength],lines[cursorLine].buffer,currentLength + 1);
 
@@ -785,11 +847,13 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
             cursorLine--;
             cursorColumn = previousLength;
         }
+        undo_push(1);
     }
 
 
     if (keyRepeat(KEY_BACKSPACE) && !IsKeyDown(KEY_LEFT_CONTROL) && !IsKeyDown(KEY_RIGHT_CONTROL)) {
         if (cursorColumn > 0) {
+            undo_run_line(); // coalesce char backspaces on a line
             memmove(&lines[cursorLine].buffer[cursorColumn - 1],&lines[cursorLine].buffer[cursorColumn],lines[cursorLine].length - cursorColumn + 1);
 
             cursorColumn--;
@@ -798,11 +862,13 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
         }
 
         else if (cursorColumn == 0 && cursorLine > 0) {
+            undo_discrete(cursorLine - 1, 2); // close the run; merge is discrete
             int previousLength = lines[cursorLine - 1].length;
             int currentLength = lines[cursorLine].length;
 
             if (!growLine(&lines[cursorLine - 1], previousLength + currentLength + 1)) {
-                return; // OOM: merge refused, nothing deleted this frame
+                undo_push(2); // OOM: merge refused, nothing deleted this frame
+                return;
             }
 
             memcpy(&lines[cursorLine - 1].buffer[previousLength],lines[cursorLine].buffer,currentLength + 1);
@@ -817,10 +883,17 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
             memmove(&lines[cursorLine + 1],&lines[cursorLine + 2],(lineCount - cursorLine - 2) * sizeof(Line));
 
             lineCount--;
+            undo_push(1);
         }
     }
 
     if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) && IsKeyPressed(KEY_DELETE)) {
+        int tmpCol = cursorColumn;
+        while (tmpCol < lines[cursorLine].length && !isWordChar(lines[cursorLine].buffer[tmpCol])) tmpCol++;
+        while (tmpCol < lines[cursorLine].length && isWordChar(lines[cursorLine].buffer[tmpCol])) tmpCol++;
+        int mergeDown = (tmpCol == lines[cursorLine].length && cursorLine < lineCount - 1);
+        undo_discrete(cursorLine, mergeDown ? 2 : 1);
+
         int oldColumn = cursorColumn;
         while (cursorColumn < lines[cursorLine].length && !isWordChar(lines[cursorLine].buffer[cursorColumn]))
             cursorColumn++;
@@ -837,7 +910,8 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
             int currentLength = lines[cursorLine].length;
             int nextLength = lines[cursorLine + 1].length;
             if (!growLine(&lines[cursorLine], currentLength + nextLength + 1)) {
-                return; // OOM: merge refused
+                undo_push(2); // OOM: merge refused
+                return;
             }
             memcpy(&lines[cursorLine].buffer[currentLength],lines[cursorLine + 1].buffer,nextLength + 1);
             lines[cursorLine].length += nextLength;
@@ -846,19 +920,23 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
             memmove(&lines[cursorLine + 1],&lines[cursorLine + 2],(lineCount - cursorLine - 2) * sizeof(Line));
             lineCount--;
         }
+        undo_push(1);
     }
     if (keyRepeat(KEY_DELETE) && !IsKeyDown(KEY_LEFT_CONTROL) && !IsKeyDown(KEY_RIGHT_CONTROL)) {
         if (cursorColumn < lines[cursorLine].length) {
+            undo_run_line(); // coalesce char deletes on a line
             memmove(&lines[cursorLine].buffer[cursorColumn],&lines[cursorLine].buffer[cursorColumn + 1],lines[cursorLine].length - cursorColumn);
 
             lines[cursorLine].length--;
             contentWidthDirty = 1;
         }
         else if (cursorLine < lineCount - 1) {
+            undo_discrete(cursorLine, 2); // close the run; merge is discrete
             int currentLength = lines[cursorLine].length;
             int nextLength = lines[cursorLine + 1].length;
             if (!growLine(&lines[cursorLine], currentLength + nextLength + 1)) {
-                return; // OOM: merge refused
+                undo_push(2); // OOM: merge refused
+                return;
             }
             memcpy(&lines[cursorLine].buffer[currentLength],lines[cursorLine + 1].buffer,nextLength + 1);
             lines[cursorLine].length += nextLength;
@@ -866,12 +944,18 @@ if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
             free(lines[cursorLine + 1].buffer);
             memmove(&lines[cursorLine + 1],&lines[cursorLine + 2],(lineCount - cursorLine - 2) * sizeof(Line));
             lineCount--;
+            undo_push(1);
         }
     }
 }
 
 void textstuff(Font usedfont, float fontsize) {
     selection();
+
+    // Any mouse press/release finalizes a coalescing run (the caret may
+    // jump, or this may start a drag-select to fold).
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+        undo_push(1);
 
     // Monospace advance per column. Spacing 0.8 adds per char, so measure a
     // 10-char run and divide (single-glyph measure undercounts the advance).
@@ -918,8 +1002,11 @@ void textstuff(Font usedfont, float fontsize) {
 
     int keypressed = GetCharPressed();
     while (keypressed > 0) {
-        if (selecting && keypressed > 0) {
+        if (selecting) {
+            undo_run_selection(); // typing over a selection folds into a run
             deleteSelection();
+        } else {
+            undo_run_line();      // coalesce typed chars on the same line
         }
         Line *line = &lines[cursorLine];
 
@@ -938,9 +1025,11 @@ void textstuff(Font usedfont, float fontsize) {
     }
     // Hello World
     if (IsKeyPressed(KEY_ENTER)||IsKeyPressed(KEY_KP_ENTER)) {
+        undo_discrete(cursorLine, 1);
         int remainingLength = lines[cursorLine].length - cursorColumn;
         if (!addLine(cursorLine + 1)) {
             oomRefuse(); // OOM: cannot split, Enter refused
+            undo_drop();
         } else {
             if (!growLine(&lines[cursorLine + 1], remainingLength + 1)) {
                 // OOM: the new line stays empty; degrade to plain newline.
@@ -954,12 +1043,15 @@ void textstuff(Font usedfont, float fontsize) {
             contentWidthDirty = 1;
             cursorLine++;
             cursorColumn = 0;
+            undo_push(2);
         }
     }
     if (IsKeyPressed(KEY_TAB)) {
+        undo_discrete(cursorLine, 1);
         Line *line = &lines[cursorLine];
         if ((line->length + 1 >= line->capacity && !growLine(line, line->capacity * 2))) {
             oomRefuse(); // OOM: Tab refused, buffer untouched
+            undo_drop();
         } else {
             memmove(&line->buffer[cursorColumn + 1],&line->buffer[cursorColumn],line->length - cursorColumn + 1);
             line->buffer[cursorColumn] = '\t';
@@ -967,6 +1059,7 @@ void textstuff(Font usedfont, float fontsize) {
             contentWidthDirty = 1;
             cursorColumn++;
             line->buffer[line->length] = '\0';
+            undo_push(1);
         }
     }
     float cursorWidth = cursorColumn * charW;
@@ -979,9 +1072,10 @@ void textstuff(Font usedfont, float fontsize) {
     vertscroll=scrollbar(ScreenRect.y,ScreenRect.height,lineCount,lineHeight,&scrollLine);
     //terminal_height=make_terminal(ScreenRect.height);
 
-    // OOM feedback: flash above the bottom ribbon whenever an edit was refused.
-    if (oomFlashUntil > 0.0 && GetTime() < oomFlashUntil) {
-        DrawTextEx(usedfont, "OUT OF MEMORY - edit refused",
+    // Error feedback: flash above the bottom ribbon whenever an operation
+    // was refused or failed (OOM, save failure, ...).
+    if (statusUntil > 0.0 && GetTime() < statusUntil) {
+        DrawTextEx(usedfont, statusMsg,
                    (Vector2){10, GetScreenHeight() - fontsize * 1.05f - 24},
                    fontsize * 0.8f, 0, RED);
     }

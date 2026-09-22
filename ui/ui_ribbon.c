@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "ui_ribbonEvents.h"
-#include "app_spawn/app_spawn.h"
+#include "func/app_spawn.h"
+#include "../func/undo.h"
 #include <stdlib.h>
 #include <string.h>
 #include "raylib.h"
@@ -249,6 +250,14 @@ void handleRibbonEvents(Rectangle rect,char *option) {
 
             if (strcmp(option,"Select All") == 0) {
                 selectall();
+            }
+
+            if (strcmp(option,"Undo") == 0) {
+                undo_undo();
+            }
+
+            if (strcmp(option,"Redo") == 0) {
+                undo_redo();
             }
 
             if (strcmp(option,"About") == 0) {

@@ -30,21 +30,24 @@ $env:PATH = "C:\Program Files\JetBrains\CLion 2026.2.1\bin\mingw\bin;$env:PATH"
 
 ### Working
 - File: New (spawns new window), Open, Save, Save As, Quit
-- Edit: Select All, Copy/Cut/Paste (Ctrl+C/X/V), Ctrl+A
+- Edit: Undo/Redo (Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z), Select All, Copy/Cut/Paste (Ctrl+C/X/V), Ctrl+A
+- Undo model: linear in-memory delta stack (100-step cap), typing coalesces into one step per line-run, redo pruned on new edit
 - Navigation: Arrow keys, Home/End, Ctrl+Left/Right (word), Ctrl+Up/Down (top/bottom)
 - Scrolling: Mouse wheel (vertical), Shift+wheel (horizontal), Ctrl+wheel (zoom)
 - Zoom: Ctrl++/= (in), Ctrl+- (out), Ctrl+0 (reset) — editor only, ribbon fixed
 
 ### Stubs (highlight only)
-- Undo/Redo, Find/Replace, Go To Line
+- Find/Replace, Go To Line
 - Run: Compile, Run, Arguments, Stop
 - Project, Options, Help → About
+- Edit: Cut/Paste/Clear (keyboard shortcuts work; menu items unwired)
 
 ## Project Structure
 
 ```
 main.c                 — window, fonts, frame loop
-app_spawn.c/.h         — cross-platform new-window spawning
+func/app_spawn.c/.h    — cross-platform new-window spawning
+func/undo.c/.h         — linear undo/redo history (delta stack, 100-step cap)
 ui/ui_ribbon.c/.h      — menu ribbon (7 tabs, dropdowns, actions)
 ui/ui_ribbonEvents.c/.h — File menu implementations
 ui/ui_textarea.c/.h    — EDITOR CORE (lines, cursor, selection, rendering)
@@ -54,11 +57,12 @@ ui/ui_scroll.c/.h      — scrollbars, wheel handling, zoom
 ## Roadmap
 
 1. ✅ Menu cut + wire Quit/Select All
-2. **Toolchain v1**: `toolchain.c` with `runTool()`, Options→Directories config, Compile menu
-3. **Messages pane**: compile output area (stub exists in ui_textarea.c)
-4. **Run**: compile → execute (reuse app_spawn.c pattern)
-5. **Project**: multi-file support
-6. **Debugger**: LLDB integration
+2. ✅ Undo/Redo — delta stack (func/undo.c), coalesced typing runs, Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z
+3. **Toolchain v1**: `toolchain.c` with `runTool()`, Options→Directories config, Compile menu
+4. **Messages pane**: compile output area (stub exists in ui_textarea.c)
+5. **Run**: compile → execute (reuse func/app_spawn.c pattern)
+6. **Project**: multi-file support
+7. **Debugger**: LLDB integration
 
 ## Credits
 
