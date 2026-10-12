@@ -51,5 +51,7 @@ target_link_libraries(JetCpp PRIVATE
 
 # Editor fonts ship next to the executable; main.c resolves them relative
 # to the exe via GetApplicationDirectory() (fixes hardcoded C:/DEV/ATR paths).
+# README.md too: Help -> About opens it from the exe dir.
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/Px437_IBM_VGA_9x16.ttf"
+          "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
      DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")

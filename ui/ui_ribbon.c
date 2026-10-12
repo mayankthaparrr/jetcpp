@@ -1,3 +1,5 @@
+//TODO: Highlights on menu options for character, and embedding them to a character.
+
 #include <stdio.h>
 #include "ui_ribbonEvents.h"
 #include "func/app_spawn.h"
@@ -6,8 +8,8 @@
 #include <string.h>
 #include "raylib.h"
 
-void handleRibbonHover();
-void handleRibbonEvents();
+void handleRibbonHover(void);
+void handleRibbonEvents(Rectangle rect,char *option);
 typedef struct {
     char first_letter;
     char *remains;
@@ -102,23 +104,18 @@ void drawMenu(ribbonOptions option[],int i,Color color, Font usedfont,float font
     }
     width*=1.1;
 
-    // Background height must be measured from THIS menu's items, not the
-    // (unrelated) `options` array — indexing options[i] by item count used
-    // to read out of bounds for the larger menus.
-    DrawRectangleRounded((Rectangle){posx2,MeasureTextEx(usedfont,option[0].name,fontsize,0).y-15,width,height+15},0.1,1,color);
-    float sposx=posx2*1.01;
-    float nposx=sposx+(width*0.90);
+    DrawRectangleRounded((Rectangle){posx2,fontsize-10,width,height+15},0.1,1,color);
 
-    height=fontsize*1.3; width=width*0.1;
+    height=fontsize*1.3;
     for (int n=0;n<i;n++) {
-        float posy=height-(fontsize*0.29);
          mouse = GetMousePosition();
-        Rectangle rect={posx2+2,height,(width*10)*0.9998,MeasureTextEx(usedfont,option[n].name,fontsize,0).y};
+        // Item row spans the menu with a 2px inset each side (the old
+        // width*0.1 -> *10 int round-trip cut up to 9px off the highlight).
+        Rectangle rect={posx2+2,height,width-4,MeasureTextEx(usedfont,option[n].name,fontsize,0).y};
         if(CheckCollisionPointRec(mouse, rect)){
-            handleRibbonEvents((Rectangle){rect.x,rect.y,width*10,rect.height},option[n].name);
-            DrawRectangle(rect.x,rect.y,width*10,rect.height,LIGHTGRAY);
+            handleRibbonEvents(rect,option[n].name);
+            DrawRectangleRec(rect,LIGHTGRAY);
         }
-        // DrawLine(sposx,posy,nposx,posy,DARKGRAY);
         DrawTextEx(usedfont,option[n].name,(Vector2){posx2+5,height},fontsize,0,BLACK);
 
 
@@ -147,6 +144,12 @@ void selectMenu(int i, Color color, Font usedfont, float fontsize) {
 
 static int activeMenu=-1;
 
+// The text area asks this before handling a click: while a dropdown is open
+// the click belongs to the menu (pick an item, or close it), never the text.
+int ribbonMenuOpen(void) {
+    return activeMenu != -1;
+}
+
 void handleRibbonHover(void) {
     if (activeMenu == -1) {
         return;
@@ -154,7 +157,6 @@ void handleRibbonHover(void) {
 
 
     Vector2 mouse = GetMousePosition();
-    int overRibbon=0;
 
     for (int i = 0; i < 7; i++) {
         if (CheckCollisionPointRec(mouse, items[i].rect)) {
@@ -162,17 +164,15 @@ void handleRibbonHover(void) {
             return;
         }
     }
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)&&!overRibbon) {
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         activeMenu = -1;
     }
 }
 
 
 void drawRibbon(Color color, Font usedfont, float fontsize) {
-    float sumx;
     // draw currently active dropdown
     if (activeMenu != -1) {selectMenu(activeMenu, color, usedfont, fontsize);}
-    sumx = (GetScreenWidth() - sumx - 10) / 16;
     int posx = (GetScreenWidth() * 0.01);
     DrawRectangle(0, 0, GetScreenWidth(), fontsize * 1.05, color);
     int posx2 = posx;
@@ -197,10 +197,12 @@ void drawRibbon(Color color, Font usedfont, float fontsize) {
                     activeMenu = i + 1;
                 }
             }
+
         }
 
         // drawing...
         if (activeMenu == i + 1 || CheckCollisionPointRec(GetMousePosition(),items[i].rect)) {
+
             DrawRectangleRounded(items[i].rect,0.2,8,LIGHTGRAY);
         }
         DrawTextEx(usedfont,c,(Vector2){posx, 1},fontsize,0,RED);
@@ -263,9 +265,12 @@ void handleRibbonEvents(Rectangle rect,char *option) {
             if (strcmp(option,"About") == 0) {
                 // Pop the project README open in a new editor window.
                 // Falls back to showing it in this window if spawn fails.
+                // README ships next to the exe (copied by CMake, like the font).
                 activeMenu = -1;
-                if (!spawnNewInstanceWithFile("C:/DEV/ATR/README.md")) {
-                    loadFileAtPath("C:/DEV/ATR/README.md");
+                char readme[1024];
+                snprintf(readme, sizeof readme, "%sREADME.md", GetApplicationDirectory());
+                if (!spawnNewInstanceWithFile(readme)) {
+                    loadFileAtPath(readme);
                 }
             }
         }

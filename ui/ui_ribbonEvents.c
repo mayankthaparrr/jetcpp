@@ -72,24 +72,25 @@ static void resetEditor(void) {
     selecting = 0;
 
     scrollLine = 0;
-    scrollColumn = 0;
     scrollX = 0;
 }
 
 // Replace a line's contents, growing its buffer if needed.
-static void setLineText(int index, const char *text, int len) {
+// Returns 1 on success, 0 on OOM (line left as it was).
+static int setLineText(int index, const char *text, int len) {
     Line *l = &lines[index];
     if (len + 1 > l->capacity) {
         int newCapacity = l->capacity;
         while (newCapacity < len + 1) newCapacity *= 2;
         char *grown = realloc(l->buffer, newCapacity);
-        if (!grown) return;
+        if (!grown) return 0;
         l->buffer = grown;
         l->capacity = newCapacity;
     }
     memcpy(l->buffer, text, len);
     l->buffer[len] = '\0';
     l->length = len;
+    return 1;
 }
 
 void newfile() {
@@ -104,6 +105,7 @@ void selectall() {
     cursorLine = lineCount - 1;
     cursorColumn = lines[cursorLine].length;
     selecting = 1;
+    caretKeepView(); // selecting everything shouldn't jump to the end of the file
 }
 
 // Load `path` into the editor buffer. Used by File -> Open and by
@@ -114,9 +116,16 @@ void loadFileAtPath(const char *path) {
         showStatusError("FAILED TO OPEN FILE");
         return;
     }
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
+    // ftell fails (-1) on files >= 2GB (long is 32-bit on Windows); unchecked,
+    // that became malloc(0) followed by an unbounded fread.
+    long size = -1;
+    if (fseek(f, 0, SEEK_END) == 0)
+        size = ftell(f);
+    if (size < 0 || fseek(f, 0, SEEK_SET) != 0) {
+        fclose(f);
+        showStatusError("FAILED TO OPEN FILE (too large?)");
+        return;
+    }
 
     char *content = malloc(size + 1);
     if (!content) {
@@ -141,11 +150,10 @@ void loadFileAtPath(const char *path) {
             if (content[i] == '\0' && len == 0 && line > 0) break;
             // OOM mid-load: keep what loaded so far rather than corrupt
             // the buffer by writing past the array.
-            if (line > 0 && !addLine(lineCount)) {
+            if ((line > 0 && !addLine(lineCount)) || !setLineText(line, start, len)) {
                 showStatusError("OUT OF MEMORY - file partially loaded");
                 break;
             }
-            setLineText(line, start, len);
             line++;
             start = &content[i + 1];
         }
@@ -169,16 +177,21 @@ void openfile() {
 }
 
 // Write all lines to path, joined with CRLF line endings.
-// Returns 1 on success, 0 on failure.
+// Returns 1 on success, 0 on failure — including a short write (disk full)
+// or a failed final flush in fclose, which used to report success.
 static int writeFile(const char *path) {
     FILE *f = fopen(path, "wb");
     if (!f) return 0;
-    for (int i = 0; i < lineCount; i++) {
-        fwrite(lines[i].buffer, 1, lines[i].length, f);
-        if (i < lineCount - 1) fwrite("\r\n", 1, 2, f);
+    int ok = 1;
+    for (int i = 0; i < lineCount && ok; i++) {
+        if (fwrite(lines[i].buffer, 1, lines[i].length, f) != (size_t)lines[i].length)
+            ok = 0;
+        if (ok && i < lineCount - 1 && fwrite("\r\n", 1, 2, f) != 2)
+            ok = 0;
     }
-    fclose(f);
-    return 1;
+    if (fclose(f) != 0)
+        ok = 0;
+    return ok;
 }
 
 void savefile() {

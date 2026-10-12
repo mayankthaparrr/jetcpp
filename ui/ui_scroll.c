@@ -98,7 +98,17 @@ void scrollHorizontal(float cursorWidth, float screenWidth, float *scrollX) {
 
 }
 
-float scrollbar(float posy,float height,int linecount,float lineheight,int *scrollLine){
+// Same tests the bars used to apply to their thumbs (thumb smaller than the
+// track): a bar is needed when the content doesn't fit.
+int scrollbarNeeded(float height,int linecount,float lineheight){
+    return lineheight > 0 && height / lineheight < linecount;
+}
+
+int scrollbarHorizontalNeeded(float width,float contentWidth){
+    return contentWidth > width;
+}
+
+float scrollbar(float posy,float height,int linecount,float lineheight,int *scrollLine,int visible){
 
     float thumbHeight = (height * (height / lineheight) / linecount);
 
@@ -115,15 +125,17 @@ float scrollbar(float posy,float height,int linecount,float lineheight,int *scro
     if (maxScroll > 0)
         thumbY += ((float)*scrollLine / maxScroll) * (height - thumbHeight);
 
-    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
-    CheckCollisionPointRec(GetMousePosition(),(Rectangle){GetScreenWidth()-25,thumbY,20,thumbHeight})) {
+    // Hitboxes are 20px wide, centred on the 10px bar drawn at W-15..W-5
+    // (N2: they used to sit 10px to the left of it).
+    if (visible && IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
+    CheckCollisionPointRec(GetMousePosition(),(Rectangle){GetScreenWidth()-20,thumbY,20,thumbHeight})) {
         draggingScrollbar = 1;
         scrollbarGrabOffset = GetMouseY() - thumbY;
     }
 
-    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
-    CheckCollisionPointRec(GetMousePosition(),(Rectangle){GetScreenWidth()-25,posy-5,20,height}) &&
-    !CheckCollisionPointRec(GetMousePosition(),(Rectangle){GetScreenWidth()-25,thumbY,20,thumbHeight}) &&
+    if (visible && IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
+    CheckCollisionPointRec(GetMousePosition(),(Rectangle){GetScreenWidth()-20,posy-5,20,height}) &&
+    !CheckCollisionPointRec(GetMousePosition(),(Rectangle){GetScreenWidth()-20,thumbY,20,thumbHeight}) &&
     maxScroll > 0) {
 
         *scrollLine = ((GetMouseY() - (posy - 5)) / height) * maxScroll;
@@ -162,7 +174,7 @@ float scrollbar(float posy,float height,int linecount,float lineheight,int *scro
         thumbY = posy - 5 + height - thumbHeight;
 
     //thumbHeight*=1.007;
-    if (thumbHeight<height) {
+    if (visible) {
         Rectangle Column ={GetScreenWidth()-15,posy-5,10,height};
         Rectangle Thumb ={GetScreenWidth()-15,thumbY,10,thumbHeight};
         DrawRectangleRounded(Column,0.5,0,SKYBLUE);
@@ -174,7 +186,7 @@ float scrollbar(float posy,float height,int linecount,float lineheight,int *scro
     }
 
 }
-float scrollbarHorizontal(float posx,float posy,float width,float contentWidth,float *scrollX) {
+float scrollbarHorizontal(float posx,float posy,float width,float contentWidth,float *scrollX,int visible) {
 
 
     float thumbWidth = width * width / contentWidth;
@@ -190,7 +202,7 @@ float scrollbarHorizontal(float posx,float posy,float width,float contentWidth,f
     Rectangle Thumb = {thumbX,posy+10,thumbWidth,10};
 
 
-    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
+    if (visible && IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
     CheckCollisionPointRec(GetMousePosition(), Thumb)) {
         draggingHorizontalScrollbar = 1;
         horizontalScrollbarGrabOffset = GetMouseX() - thumbX;
@@ -214,7 +226,7 @@ float scrollbarHorizontal(float posx,float posy,float width,float contentWidth,f
 
 
 
-    if (thumbWidth < width) {
+    if (visible) {
         DrawRectangleRounded(Column,0.5,0,SKYBLUE);
         DrawRectangleRounded(Thumb,0.5,0,WHITE);
         return 10;

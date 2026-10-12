@@ -6,6 +6,7 @@ void textstuff(Font,float);
 
 int addLine(int position);
 void showStatusError(const char *msg); // red flash above the bottom ribbon
+void caretKeepView(void); // caret moved, but don't scroll to it (Select All)
 typedef struct {
     char *buffer;
     int length;
@@ -20,7 +21,6 @@ extern int selectionLine;
 extern int selectionColumn;
 extern int selecting;
 extern int scrollLine;
-extern int scrollColumn;
 extern float scrollX;
 extern float zoom;
 extern float lineHeight;

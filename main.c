@@ -10,21 +10,13 @@
 #include "ui/ui_ribbonEvents.h"
 #include <nfd.h>
 
-int addLine(int);
-
-void drawRibbon(Color,Font,float);
-void borders(float,char *,Font);
 float fontsize;
-float basefont; // unzoomed size used for the ribbon; fontsize = basefont * zoom
-Font IBM;
+float basefont;
+Font ourfont;
 
 
 int main(int argc, char **argv) {
-#ifdef _WIN32
-    //SetConfigFlags(FLAG_WINDOW_UNDECORATED);
-#endif
-    //Todo: Custom Window Title Bar
-    //
+
     //Window Initialization
 
     SetConfigFlags(FLAG_MSAA_4X_HINT);
@@ -35,18 +27,13 @@ int main(int argc, char **argv) {
 
 
     addLine(0);
-    // Font ships next to the executable (copied by CMake); resolve relative
-    // to the exe dir so the app runs from any folder or machine.
-    IBM = LoadFont(TextFormat("%sPx437_IBM_VGA_9x16.ttf", GetApplicationDirectory()));
-    if (IBM.texture.id == 0) IBM = GetFontDefault(); // missing font must never break drawing
-
-    // Launched with a file argument (e.g. Help -> About opening the README
-    // in a new window): load it instead of starting with an empty buffer.
+    ourfont = LoadFont(TextFormat("%sPx437_IBM_VGA_9x16.ttf", GetApplicationDirectory()));
+    if (ourfont.texture.id == 0) ourfont = GetFontDefault();
     if (argc > 1 && argv[1] && argv[1][0] != '\0') {
         loadFileAtPath(argv[1]);
     }
 
-    Font usedfont=IBM;
+    Font usedfont=ourfont;
     SetTextureFilter(usedfont.texture, TEXTURE_FILTER_BILINEAR);
     Color tooblue = GetColor(0x0000aaff);
     Color greyy = GetColor(0xada8acff);
