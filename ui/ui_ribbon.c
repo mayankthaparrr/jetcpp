@@ -4,6 +4,7 @@
 #include "ui_ribbonEvents.h"
 #include "func/app_spawn.h"
 #include "../func/undo.h"
+#include "../func/toolchain.h"
 #include <stdlib.h>
 #include <string.h>
 #include "raylib.h"
@@ -34,25 +35,25 @@ ribbonItems items[7]={
 
 typedef struct {
     char *name;
-    int highlight;
+    int wired; // 0 = does nothing yet: drawn gray, no hover, can't be clicked
 }ribbonOptions;
 
 ribbonOptions file[5]={
-    {"New",0},
-    {"Open",0},
-    {"Save",0},
-    {"Save As",0},
-    {"Quit",0}
+    {"New",1},
+    {"Open",1},
+    {"Save",1},
+    {"Save As",1},
+    {"Quit",1}
 };
 
 ribbonOptions edit[7]={
-    {"Undo",0},
-    {"Redo",0},
+    {"Undo",1},
+    {"Redo",1},
     {"Cut",0},
     {"Copy",0},
     {"Paste",0},
     {"Clear",0},
-    {"Select All",0}
+    {"Select All",1}
 };
 ribbonOptions search[4]={
     {"Find",0},
@@ -61,11 +62,12 @@ ribbonOptions search[4]={
     {"Go To Line",0}
 };
 
-ribbonOptions run[4]={
-    {"Compile",0},
-    {"Run",0},
+ribbonOptions run[5]={
+    {"Compile",1},
+    {"Run",1},
+    {"Debug",1},
     {"Arguments",0},
-    {"Stop",0}
+    {"Stop",1}
 };
 
 ribbonOptions project[5]={
@@ -86,7 +88,7 @@ ribbonOptions options[6]={
 };
 
 ribbonOptions help[1]={
-    {"About",0}
+    {"About",1}
 };
 Vector2 mouse;
 
@@ -112,11 +114,11 @@ void drawMenu(ribbonOptions option[],int i,Color color, Font usedfont,float font
         // Item row spans the menu with a 2px inset each side (the old
         // width*0.1 -> *10 int round-trip cut up to 9px off the highlight).
         Rectangle rect={posx2+2,height,width-4,MeasureTextEx(usedfont,option[n].name,fontsize,0).y};
-        if(CheckCollisionPointRec(mouse, rect)){
+        if(option[n].wired && CheckCollisionPointRec(mouse, rect)){
             handleRibbonEvents(rect,option[n].name);
             DrawRectangleRec(rect,LIGHTGRAY);
         }
-        DrawTextEx(usedfont,option[n].name,(Vector2){posx2+5,height},fontsize,0,BLACK);
+        DrawTextEx(usedfont,option[n].name,(Vector2){posx2+5,height},fontsize,0,option[n].wired ? BLACK : GRAY);
 
 
         height+=MeasureTextEx(usedfont,option[n].name,fontsize,0).y*1.5;
@@ -135,7 +137,7 @@ void selectMenu(int i, Color color, Font usedfont, float fontsize) {
             case 1:j=5;drawMenu(file,j,color,usedfont,fontsize,items[0].x);break;//file
             case 2:j=7;drawMenu(edit,j,color,usedfont,fontsize,items[1].x);break;//edit
             case 3:j=4;drawMenu(search,j,color,usedfont,fontsize,items[2].x);break;//search
-            case 4:j=4;drawMenu(run,j,color,usedfont,fontsize,items[3].x);break;//run
+            case 4:j=5;drawMenu(run,j,color,usedfont,fontsize,items[3].x);break;//run
             case 5:j=5;drawMenu(project,j,color,usedfont,fontsize,items[4].x);break;//project
             case 6:j=6;drawMenu(options,j,color,usedfont,fontsize,items[5].x);break;//options
             case 7:j=1;drawMenu(help,j,color,usedfont,fontsize,items[6].x);break;//help
@@ -260,6 +262,22 @@ void handleRibbonEvents(Rectangle rect,char *option) {
 
             if (strcmp(option,"Redo") == 0) {
                 undo_redo();
+            }
+
+            if (strcmp(option,"Compile") == 0) {
+                compileOnly();
+            }
+
+            if (strcmp(option,"Run") == 0) {
+                compileAndRun();
+            }
+
+            if (strcmp(option,"Debug") == 0) {
+                compileAndDebug();
+            }
+
+            if (strcmp(option,"Stop") == 0) {
+                stopProgram();
             }
 
             if (strcmp(option,"About") == 0) {

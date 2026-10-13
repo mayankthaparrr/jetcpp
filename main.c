@@ -8,6 +8,9 @@
 #include "ui/ui_ribbon.h"
 #include "ui/ui_textarea.h"
 #include "ui/ui_ribbonEvents.h"
+#include "ui/ui_messages.h"
+#include "func/toolchain.h"
+#include "func/lsp.h"
 #include <nfd.h>
 
 float fontsize;
@@ -48,14 +51,18 @@ int main(int argc, char **argv) {
         }
         fontsize=basefont*zoom; // zoom factor set by Ctrl+wheel / Ctrl+'+'
         // (ribbon stays at basefont: menus shouldn't scale with zoom)
+        toolchainUpdate();
+        lspUpdate();
         BeginDrawing();
         ClearBackground(tooblue);
         borders(fontsize,filename,usedfont);
         textstuff(usedfont,fontsize);
+        drawMessages(usedfont,fontsize);
         drawRibbon(greyy,usedfont,basefont);
         EndDrawing();
 
     }
+    lspStop();
     NFD_Quit();
     return 0;
 }

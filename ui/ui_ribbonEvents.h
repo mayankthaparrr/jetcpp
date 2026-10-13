@@ -10,6 +10,7 @@ void newfile(void);
 void selectall(void);
 void openfile(void);
 void loadFileAtPath(const char *path);
-void savefile(void);
-void saveas(void);
+int savefile(void); // 1 = saved
+int saveas(void);   // 1 = saved
+const char *currentFilepath(void); // NULL until the file is saved/opened
 #endif //ATR_UI_RIBBONEVENTS_H

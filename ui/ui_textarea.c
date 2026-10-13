@@ -10,7 +10,10 @@
 #include "ui_scroll.h"
 #include "ui_ribbon.h"
 #include "ui_ribbonEvents.h"
+#include "ui_messages.h"
 #include "../func/undo.h"
+#include "../func/lsp.h"
+#include "ui_syntax.h"
 
 //inits vars
 int scrollLine = 0;
@@ -163,6 +166,12 @@ static int growLines(int newCount) {
 float vertscroll=0;
 float horscroll=0;
 float terminal_height=0;
+Rectangle terminalRect;
+
+// for each line: does it start inside a /* */ comment. redone on every edit
+static unsigned char *lineInComment = NULL;
+static int lineInCommentCap = 0;
+static int lineCommentCount = 0; // lines filled in on the last redo
 
 // Per-frame text metrics, measured BEFORE the layout so initrect() can size
 // the scrollbars from this frame's content.
@@ -177,12 +186,24 @@ static void measureTextMetrics(Font usedfont, float fontsize) {
     // byte sweep, no glyph work.
     static float lastchar_width = 0;
     if (contentWidthDirty || char_width != lastchar_width) {
+        if (contentWidthDirty) lspChanged(); // the text changed: clangd gets it once typing pauses
+        if (lineCount > lineInCommentCap) {
+            unsigned char *grown = realloc(lineInComment, lineCount * 2);
+            if (grown) {
+                lineInComment = grown;
+                lineInCommentCap = lineCount * 2;
+            }
+        }
         cachedContentWidth = 0;
+        int inComment = 0;
         for (int i = 0; i < lineCount; i++) {
             float width = visualCol(lines[i].buffer, lines[i].length) * char_width;
             if (width > cachedContentWidth)
                 cachedContentWidth = width;
+            if (i < lineInCommentCap) lineInComment[i] = inComment; // out of memory: comments just won't span lines
+            inComment = syntaxLine(lines[i].buffer, lines[i].length, inComment, NULL);
         }
+        lineCommentCount = lineCount < lineInCommentCap ? lineCount : lineInCommentCap;
         contentWidthDirty = 0;
         lastchar_width = char_width;
     }
@@ -190,7 +211,10 @@ static void measureTextMetrics(Font usedfont, float fontsize) {
 
 void initrect() {
     ScreenRect=(Rectangle){GetScreenWidth()*0.005,ribbon_height*1.4,GetScreenWidth()*0.99,GetScreenHeight()-ribbon_height*2.8};
+    // the Message pane takes the bottom of the editor while it's open
+    terminal_height = messagesOpen() ? make_terminal(ScreenRect.height) : 0;
     ScreenRect.height-=terminal_height;
+    terminalRect=(Rectangle){ScreenRect.x,ScreenRect.y+ScreenRect.height,ScreenRect.width,terminal_height};
 
     // K7: decide scrollbar visibility from THIS frame's content (it used to
     // reuse last frame's scrollbar() results). Tested on the inner rect that
@@ -1082,11 +1106,49 @@ void navigation(void) {
     }
 }
 
-// Draw one line. A tab jumps to the next tab stop (DrawTextEx alone would
-// give it one column), so lines with tabs are drawn as tab-separated runs,
-// each placed at its own column.
-static void drawLineText(Font usedfont, float fontsize, char *text, Vector2 pos) {
-    if (!strchr(text, '\t')) {
+// what each byte of the line being drawn is (SYN_*)
+static unsigned char *lineKinds = NULL;
+static int lineKindsCap = 0;
+
+// colours line n: the scanner first, then clangd's types/functions/macros on
+// top (only over plain text, never inside comments or strings)
+static int colourLine(int n) {
+    Line *l = &lines[n];
+    if (l->length + 1 > lineKindsCap) {
+        unsigned char *grown = realloc(lineKinds, l->length + 1);
+        if (!grown) return 0; // out of memory: draw it white
+        lineKinds = grown;
+        lineKindsCap = l->length + 1;
+    }
+    int inComment = n < lineCommentCount ? lineInComment[n] : 0;
+    syntaxLine(l->buffer, l->length, inComment, lineKinds);
+
+    int count;
+    const LspToken *t = lspTokens(&count);
+    // tokens are in file order, so find this line's first one by halving
+    int lo = 0, hi = count;
+    while (lo < hi) {
+        int mid = (lo + hi) / 2;
+        if (t[mid].line < n) lo = mid + 1;
+        else hi = mid;
+    }
+    for (int k = lo; k < count && t[k].line == n; k++) {
+        if (t[k].col < 0 || t[k].col + t[k].len > l->length) continue; // from before an edit
+        int kind = syntaxKindFromLsp(lspTypeName(t[k].type));
+        if (kind == SYN_TEXT) continue;
+        for (int b = t[k].col; b < t[k].col + t[k].len; b++) {
+            if (lineKinds[b] == SYN_TEXT) lineKinds[b] = kind;
+        }
+    }
+    return 1;
+}
+
+// Draw one line in runs. A run ends at a tab (the next run starts at the next
+// tab stop, DrawTextEx alone would give a tab one column) or where the colour changes.
+static void drawLineText(Font usedfont, float fontsize, int n, Vector2 pos) {
+    char *text = lines[n].buffer;
+    int coloured = syntaxOn() && colourLine(n);
+    if (!coloured && !strchr(text, '\t')) {
         DrawTextEx(usedfont, text, pos, fontsize, TEXT_SPACING, WHITE);
         return;
     }
@@ -1098,14 +1160,15 @@ static void drawLineText(Font usedfont, float fontsize, char *text, Vector2 pos)
             continue;
         }
         int runStart = i, runCol = col;
-        while (text[i] && text[i] != '\t') {
+        int kind = coloured ? lineKinds[i] : SYN_TEXT;
+        while (text[i] && text[i] != '\t' && (!coloured || lineKinds[i] == kind)) {
             i += codepointSize(&text[i]);
             col++;
         }
         char saved = text[i];
         text[i] = '\0'; // end the run in place; restored right after
         DrawTextEx(usedfont, &text[runStart], (Vector2){pos.x + runCol * char_width, pos.y},
-                   fontsize, TEXT_SPACING, WHITE);
+                   fontsize, TEXT_SPACING, coloured ? syntaxColor(kind) : WHITE);
         text[i] = saved;
     }
 }
@@ -1128,8 +1191,9 @@ void textstuff(Font usedfont, float fontsize) {
     navigation();
     followCaret(); // keys, edits and menu actions since the last frame
 
-    scrollMouse(lineCount, ScreenRect.height, lineHeight, &scrollLine,
-                ScreenRect.width - 5, cachedContentWidth, &scrollX);
+    if (!messagesHovered()) // the wheel scrolls the Message pane when it's under the mouse
+        scrollMouse(lineCount, ScreenRect.height, lineHeight, &scrollLine,
+                    ScreenRect.width - 5, cachedContentWidth, &scrollX);
 
     mouseSelection();
     caretKeepView(); // a mouse-placed caret is already in view: don't chase it
@@ -1144,7 +1208,7 @@ void textstuff(Font usedfont, float fontsize) {
 
     drawSelection();
     for (int i = first; i < last; i++) {
-        drawLineText(usedfont, fontsize, lines[i].buffer,
+        drawLineText(usedfont, fontsize, i,
                      (Vector2){startX-scrollX,startY + (i - scrollLine) * lineHeight});
     }
 
@@ -1246,7 +1310,6 @@ void textstuff(Font usedfont, float fontsize) {
     cursor(usedfont, fontsize, startX, startY, lineHeight);
     EndScissorMode();
     scrollbar(ScreenRect.y,ScreenRect.height,lineCount,lineHeight,&scrollLine,vertscroll > 0);
-    //terminal_height=make_terminal(ScreenRect.height);
 
     // Error feedback: flash above the bottom ribbon whenever an operation
     // was refused or failed (OOM, save failure, ...).

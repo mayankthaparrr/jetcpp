@@ -4,3 +4,4 @@
 cmake-build-debug/
 handover.txt
 logs.txt
+tests/test1/build/

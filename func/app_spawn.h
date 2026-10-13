@@ -28,4 +28,26 @@ int spawnNewInstance(void);
 // Returns 1 on success, 0 on failure.
 int spawnNewInstanceWithFile(const char *file);
 
+// runs a tool (clang) in the background, its output going into a pipe.
+// cmdline is the whole command line with paths already in quotes. 1 = started
+int spawnTool(const char *cmdline);
+// copies whatever output is waiting, never waits for more. returns bytes copied
+int readTool(char *buf, int size);
+// 1 once the tool has exited (sets exitCode). read the rest, then closeTool()
+int toolDone(int *exitCode);
+void closeTool(void);
+void killTool(void);
+
+// opens a new console window running cmdline in dir (the program, or lldb)
+int spawnConsole(const char *cmdline, const char *dir);
+// closes that window and everything it started
+void killConsole(void);
+
+// a server (clangd) that keeps running, with a pipe each way. it dies with Jet C++
+int spawnServer(const char *cmdline);
+int writeServer(const char *buf, int len); // 1 = all of it written
+int readServer(char *buf, int size);       // like readTool: never waits
+int serverAlive(void);
+void killServer(void);
+
 #endif // APP_SPAWN_H

@@ -25,6 +25,7 @@ extern float scrollX;
 extern float zoom;
 extern float lineHeight;
 extern Rectangle ScreenRect;
+extern Rectangle terminalRect; // the Message pane, under the editor
 extern int contentWidthDirty;
 
 #endif

@@ -4,6 +4,7 @@
 #include "ui_ribbonEvents.h"
 #include "ui_textarea.h"
 #include "../func/undo.h"
+#include "../func/lsp.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -38,6 +39,7 @@ static void setFilepath(const char *newPath) {
         filepath = malloc(len);
         if (filepath) memcpy(filepath, newPath, len);
     }
+    lspOpen(filepath); // clangd follows the open file (no path or not C/C++: it stops)
 }
 
 // Base name of a path, handling both / and \ separators.
@@ -73,6 +75,7 @@ static void resetEditor(void) {
 
     scrollLine = 0;
     scrollX = 0;
+    contentWidthDirty = 1; // new text: redo the line widths + comment tracking
 }
 
 // Replace a line's contents, growing its buffer if needed.
@@ -194,30 +197,38 @@ static int writeFile(const char *path) {
     return ok;
 }
 
-void savefile() {
+// returns 1 if the file is on disk now (compile needs that)
+int savefile() {
     if (!filepath) {
-        saveas(); // never saved/opened yet: ask for a location
-        return;
+        return saveas(); // never saved/opened yet: ask for a location
     }
     if (!writeFile(filepath)) {
         // K8: a failed save must be visible AND keep the unsaved-changes
         // guard armed (bufferDirty untouched) so quitting still prompts.
         showStatusError("SAVE FAILED - disk full, locked, or no permission?");
+        return 0;
     }
+    return 1;
 }
 
-void saveas() {
+int saveas() {
     nfdchar_t *outPath = NULL;
     if (NFD_SaveDialog(&outPath, NULL, 0, NULL, filename) != NFD_OKAY) {
-        return; // cancelled or failed
+        return 0; // cancelled or failed
     }
     // On some platforms outPath may be NULL when the default name was kept.
     const char *target = outPath ? outPath : filename;
-    if (writeFile(target)) {
+    int ok = writeFile(target);
+    if (ok) {
         setFilepath(target);
         setFilename(baseNameOf(target));
     } else {
         showStatusError("SAVE FAILED");
     }
     if (outPath) NFD_FreePath(outPath);
+    return ok;
+}
+
+const char *currentFilepath(void) {
+    return filepath;
 }
