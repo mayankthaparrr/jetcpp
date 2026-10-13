@@ -140,7 +140,7 @@ int main(int argc, char **argv) {
     int kCol = (int)(strstr(lines[1].buffer, "size_t k") - lines[1].buffer) + 7;
     CHECK(waitFor(1, kCol, "variable"), "k should be at byte column %d (got %s)", kCol, kindAt(1, kCol));
 
-    // ---- 4. NONAME.C style capital .C is still C: 'new' is a plain variable
+    // ---- 4. a capital .C is still C: 'new' is a plain variable
     char upper[1100];
     snprintf(upper, sizeof upper, "%s\\UPPER.C", dir);
     writeFile(upper, "int main(void) { int new = 1; return new - 1; }\n");

@@ -136,7 +136,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    // ---- 5. NONAME.C: compile asks Save As first; cancelling Save As = no compile
+    // ---- 5. noname.c: compile asks Save As first; cancelling Save As = no compile
     {
         char named[1100];
         snprintf(named, sizeof named, "%s\\saved now.c", dir);
@@ -152,7 +152,7 @@ int main(int argc, char **argv) {
         if (hasMsg("Success") < 0) dumpMsgs();
     }
 
-    // ---- 5b. capital .C (NONAME.C is the default name) is still C, not C++
+    // ---- 5b. a capital .C (old DOS-style FOO.C) is still C, not C++
     {
         char upper[1100];
         snprintf(upper, sizeof upper, "%s\\UPPER.C", dir);

@@ -69,7 +69,7 @@ static void build(int then) {
 
     killConsole(); // the last run still has the exe open, the linker can't overwrite it
 
-    // -x says the language outright: clang treats a capital .C (like NONAME.C) as c++.
+    // -x says the language outright: clang treats a capital .C (like FOO.C) as c++.
     // c++ needs -static or the exe wants libc++.dll from the toolchain folder
     char cmd[4096];
     snprintf(cmd, sizeof(cmd), "\"%s\" -x %s %s -g -O0 -Wall -fno-color-diagnostics \"%s\" -o \"%s\"%s",

@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <nfd.h>
 
-char *filename = "NONAME.C";
+char *filename = "noname.c";
 int quitRequested = 0; // set by File -> Quit; checked in the main loop
 static int filenameAllocated = 0;
 
@@ -98,7 +98,7 @@ static int setLineText(int index, const char *text, int len) {
 
 void newfile() {
     resetEditor();
-    setFilename("NONAME.C");
+    setFilename("noname.c");
     setFilepath(NULL);
 }
 

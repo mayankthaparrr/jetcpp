@@ -367,7 +367,7 @@ int main(void) {
     keyWith2(CTRL, SHIFT, KEY_Z);
     CHECK_DOC("abc");
 
-    // ---- highlighting: the scanner (filename is NONAME.C here, so it's on)
+    // ---- highlighting: the scanner (filename is noname.c here, so it's on)
     {
         unsigned char k[64];
         const char *s = "int x = 0x1F; // hi";
